@@ -2348,6 +2348,7 @@ const struct LoaderStruct
 #endif
 #ifdef HAVE_LIBCRYPTO_PQC
     DNSCryptoKeyEngine::report(DNSSECKeeper::FALCON512, &OpenSSLPQCDNSCryptoKeyEngine::maker);
+    DNSCryptoKeyEngine::report(DNSSECKeeper::DILITHIUM2, &OpenSSLPQCDNSCryptoKeyEngine::maker);
 #endif
   }
 } loaderOpenSSL;
