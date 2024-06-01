@@ -23,7 +23,7 @@ class DynBlocksTest(DNSDistTest):
     _dynBlockDuration = _maintenanceWaitTime + 2
     _config_params = ['_dynBlockQPS', '_dynBlockPeriod', '_dynBlockDuration', '_testServerPort']
 
-    def doTestDynBlockViaAPI(self, ipRange, reason, minSeconds, maxSeconds, minBlocks, maxBlocks, ebpf=False):
+    def doTestDynBlockViaAPI(self, ipRange, reason, minSeconds, maxSeconds, minBlocks, maxBlocks):
         headers = {'x-api-key': self._webServerAPIKey}
         url = 'http://127.0.0.1:' + str(self._webServerPort) + '/jsonstat?command=dynblocklist'
         r = requests.get(url, headers=headers, timeout=self._webTimeout)
@@ -35,7 +35,7 @@ class DynBlocksTest(DNSDistTest):
         self.assertIn(ipRange, content)
 
         values = content[ipRange]
-        for key in ['reason', 'seconds', 'blocks', 'action', 'ebpf']:
+        for key in ['reason', 'seconds', 'blocks', 'action']:
             self.assertIn(key, values)
 
         self.assertEqual(values['reason'], reason)
@@ -43,9 +43,8 @@ class DynBlocksTest(DNSDistTest):
         self.assertLessEqual(values['seconds'], maxSeconds)
         self.assertGreaterEqual(values['blocks'], minBlocks)
         self.assertLessEqual(values['blocks'], maxBlocks)
-        self.assertEqual(values['ebpf'], True if ebpf else False)
 
-    def doTestQRate(self, name, testViaAPI=True, ebpf=False):
+    def doTestQRate(self, name, testViaAPI=True):
         query = dns.message.make_query(name, 'A', 'IN')
         response = dns.message.make_response(query)
         rrset = dns.rrset.from_text(name,
@@ -78,11 +77,11 @@ class DynBlocksTest(DNSDistTest):
             waitForMaintenanceToRun()
 
         # we should now be dropped for up to self._dynBlockDuration + self._dynBlockPeriod
-        (_, receivedResponse) = self.sendUDPQuery(query, response=None, useQueue=False, timeout=0.5)
+        (_, receivedResponse) = self.sendUDPQuery(query, response=None, useQueue=False, timeout=1)
         self.assertEqual(receivedResponse, None)
 
         if testViaAPI:
-            self.doTestDynBlockViaAPI('127.0.0.1/32', 'Exceeded query rate', 1, self._dynBlockDuration, (sent-allowed)+1, (sent-allowed)+1, ebpf)
+            self.doTestDynBlockViaAPI('127.0.0.1/32', 'Exceeded query rate', 1, self._dynBlockDuration, (sent-allowed)+1, (sent-allowed)+1)
 
         # wait until we are not blocked anymore
         time.sleep(self._dynBlockDuration + self._dynBlockPeriod)
@@ -117,7 +116,7 @@ class DynBlocksTest(DNSDistTest):
             waitForMaintenanceToRun()
 
         # we should now be dropped for up to self._dynBlockDuration + self._dynBlockPeriod
-        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False, timeout=0.5)
+        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False)
         self.assertEqual(receivedResponse, None)
 
         # wait until we are not blocked anymore
@@ -294,7 +293,7 @@ class DynBlocksTest(DNSDistTest):
         allowed = 0
         sent = 0
         for _ in range(int(dynBlockBytesPerSecond * 5 / len(response.to_wire()))):
-            (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response, timeout=0.5)
+            (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response)
             sent = sent + len(response.to_wire())
             if receivedQuery:
                 receivedQuery.id = query.id
@@ -429,7 +428,7 @@ class DynBlocksTest(DNSDistTest):
             waitForMaintenanceToRun()
 
         # we should now be dropped for up to self._dynBlockDuration + self._dynBlockPeriod
-        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False, timeout=0.5)
+        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False)
         self.assertEqual(receivedResponse, None)
 
         # wait until we are not blocked anymore
@@ -536,7 +535,7 @@ class DynBlocksTest(DNSDistTest):
         waitForMaintenanceToRun()
 
         # we should now be dropped for up to self._dynBlockDuration + self._dynBlockPeriod
-        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False, timeout=0.5)
+        (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False)
         self.assertEqual(receivedResponse, None)
 
         # wait until we are not blocked anymore
@@ -544,51 +543,6 @@ class DynBlocksTest(DNSDistTest):
 
         # this one should succeed
         (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response)
-        receivedQuery.id = query.id
-        self.assertEqual(query, receivedQuery)
-        self.assertEqual(response, receivedResponse)
-
-    def doTestCacheMissRatio(self, name, cacheHits, cacheMisses):
-        rrset = dns.rrset.from_text(name,
-                                    60,
-                                    dns.rdataclass.IN,
-                                    dns.rdatatype.A,
-                                    '192.0.2.1')
-
-        for idx in range(cacheMisses):
-            query = dns.message.make_query(str(idx) + '.' + name, 'A', 'IN')
-            response = dns.message.make_response(query)
-            response.answer.append(rrset)
-            (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-            if receivedQuery:
-                receivedQuery.id = query.id
-                self.assertEqual(query, receivedQuery)
-                self.assertEqual(response, receivedResponse)
-            else:
-                # the query has not reached the responder,
-                # let's clear the response queue
-                self.clearToResponderQueue()
-
-        query = dns.message.make_query('0.' + name, 'A', 'IN')
-        response = dns.message.make_response(query)
-        response.answer.append(rrset)
-        for _ in range(cacheHits):
-            (_, receivedResponse) = self.sendUDPQuery(query, response=None, useQueue=False)
-
-        waitForMaintenanceToRun()
-
-        # we should now be dropped for up to self._dynBlockDuration + self._dynBlockPeriod
-        (_, receivedResponse) = self.sendUDPQuery(query, response=None, useQueue=False, timeout=0.5)
-        self.assertEqual(receivedResponse, None)
-
-        # wait until we are not blocked anymore
-        time.sleep(self._dynBlockDuration + self._dynBlockPeriod)
-
-        # this one should succeed
-        query = dns.message.make_query(str(cacheMisses + 1) + name, 'A', 'IN')
-        response = dns.message.make_response(query)
-        response.answer.append(rrset)
-        (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
         receivedQuery.id = query.id
         self.assertEqual(query, receivedQuery)
         self.assertEqual(response, receivedResponse)

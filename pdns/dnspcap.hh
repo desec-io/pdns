@@ -87,7 +87,7 @@ public:
     }
   };
 
-  PcapPacketReader(const string& fname);
+  PcapPacketReader(const string& fname); 
 
   template<typename T>
   void checkedFread(T* ptr)
@@ -118,17 +118,17 @@ public:
   char *d_buffer;
   size_t d_bufsize;
 private:
-  pdns::UniqueFilePtr d_fp{nullptr};
+  std::unique_ptr<FILE, int(*)(FILE*)> d_fp{nullptr, fclose};
   string d_fname;
   unsigned int d_skipMediaHeader;
 };
 
 class PcapPacketWriter
 {
-public:
+public: 
   PcapPacketWriter(const string& fname, const PcapPacketReader& ppr);
   PcapPacketWriter(const string& fname);
-
+  
   void write();
   void setPPR(const PcapPacketReader& ppr) { d_ppr = &ppr; }
 
@@ -136,6 +136,6 @@ private:
   string d_fname;
   const PcapPacketReader* d_ppr{nullptr};
 
-  pdns::UniqueFilePtr d_fp{nullptr};
+  std::unique_ptr<FILE, int(*)(FILE*)> d_fp{nullptr, fclose};
   bool d_first{true};
-};
+}; 

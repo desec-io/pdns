@@ -101,7 +101,7 @@ public:
     vState state{vState::Indeterminate};
   };
 
-  vState getDSRecords(const DNSName& zone, dsset_t& dsSet, bool onlyTA, unsigned int depth, const string& prefix, bool bogusOnNXD = true, bool* foundCut = nullptr);
+  vState getDSRecords(const DNSName& zone, dsmap_t& dsMap, bool onlyTA, unsigned int depth, const string& prefix, bool bogusOnNXD = true, bool* foundCut = nullptr);
 
   class AuthDomain
   {
@@ -465,11 +465,6 @@ public:
     return d_queryValidationState;
   }
 
-  [[nodiscard]] bool getDNSSECLimitHit() const
-  {
-    return d_validationContext.d_limitHit;
-  }
-
   void setQueryReceivedOverTCP(bool tcp)
   {
     d_queryReceivedOverTCP = tcp;
@@ -525,9 +520,8 @@ public:
   static unsigned int s_nonresolvingnsmaxfails;
   static unsigned int s_nonresolvingnsthrottletime;
   static unsigned int s_unthrottle_n;
+
   static unsigned int s_ecscachelimitttl;
-  static unsigned int s_maxvalidationsperq;
-  static unsigned int s_maxnsec3iterationsperq;
   static uint8_t s_ecsipv4limit;
   static uint8_t s_ecsipv6limit;
   static uint8_t s_ecsipv4cachelimit;
@@ -620,7 +614,6 @@ private:
                   unsigned int depth, const string& prefix, set<GetBestNSAnswer>& beenthere, Context& context, StopAtDelegation* stopAtDelegation,
                   std::map<DNSName, std::vector<ComboAddress>>* fallback);
   void ednsStats(boost::optional<Netmask>& ednsmask, const DNSName& qname, const string& prefix);
-  void incTimeoutStats(const ComboAddress& remoteIP);
   bool doResolveAtThisIP(const std::string& prefix, const DNSName& qname, QType qtype, LWResult& lwr, boost::optional<Netmask>& ednsmask, const DNSName& auth, bool sendRDQuery, bool wasForwarded, const DNSName& nsName, const ComboAddress& remoteIP, bool doTCP, bool doDoT, bool& truncated, bool& spoofed, boost::optional<EDNSExtendedError>& extendedError, bool dontThrottle = false);
   bool processAnswer(unsigned int depth, const string& prefix, LWResult& lwr, const DNSName& qname, QType qtype, DNSName& auth, bool wasForwarded, const boost::optional<Netmask>& ednsmask, bool sendRDQuery, NsSet& nameservers, std::vector<DNSRecord>& ret, const DNSFilterEngine& dfe, bool* gotNewServers, int* rcode, vState& state, const ComboAddress& remoteIP);
 
@@ -672,18 +665,16 @@ private:
   dState getDenialValidationState(const NegCache::NegCacheEntry& negEntry, dState expectedState, bool referralToUnsigned, const string& prefix);
   void updateDenialValidationState(const DNSName& qname, vState& neValidationState, const DNSName& neName, vState& state, dState denialState, dState expectedState, bool isDS, unsigned int depth, const string& prefix);
   void computeNegCacheValidationStatus(const NegCache::NegCacheEntry& negEntry, const DNSName& qname, QType qtype, int res, vState& state, unsigned int depth, const string& prefix);
-  vState getTA(const DNSName& zone, dsset_t& dsSet, const string& prefix);
+  vState getTA(const DNSName& zone, dsmap_t& dsMap, const string& prefix);
   vState getValidationStatus(const DNSName& name, bool wouldBeValid, bool typeIsDS, unsigned int depth, const string& prefix);
   void updateValidationStatusInCache(const DNSName& qname, QType qtype, bool aaFlag, vState newState) const;
   void initZoneCutsFromTA(const DNSName& from, const string& prefix);
-  size_t countSupportedDS(const dsset_t& dsSet, const string& prefix);
+  size_t countSupportedDS(const dsmap_t& dsmap, const string& prefix);
 
   void handleNewTarget(const std::string& prefix, const DNSName& qname, const DNSName& newtarget, QType qtype, std::vector<DNSRecord>& ret, int& rcode, unsigned int depth, const std::vector<DNSRecord>& recordsFromAnswer, vState& state);
 
   void handlePolicyHit(const std::string& prefix, const DNSName& qname, QType qtype, vector<DNSRecord>& ret, bool& done, int& rcode, unsigned int depth);
   unsigned int getAdjustedRecursionBound() const;
-
-  void checkWildcardProof(const DNSName& qname, const QType& qtype, DNSRecord& rec, const LWResult& lwr, vState& state, unsigned int depth, const std::string& prefix, unsigned int wildcardLabelsCount);
 
   void setUpdatingRootNS()
   {
@@ -707,7 +698,6 @@ private:
   std::shared_ptr<std::vector<std::unique_ptr<RemoteLogger>>> d_outgoingProtobufServers;
   std::shared_ptr<std::vector<std::unique_ptr<FrameStreamLogger>>> d_frameStreamServers;
   boost::optional<const boost::uuids::uuid&> d_initialRequestId;
-  pdns::validation::ValidationContext d_validationContext;
   asyncresolve_t d_asyncResolve{nullptr};
   // d_now is initialized in the constructor and updates after outgoing requests in lwres.cc:asyncresolve
   struct timeval d_now;
@@ -742,7 +732,6 @@ private:
 /* external functions, opaque to us */
 LWResult::Result asendtcp(const PacketBuffer& data, shared_ptr<TCPIOHandler>&);
 LWResult::Result arecvtcp(PacketBuffer& data, size_t len, shared_ptr<TCPIOHandler>&, bool incompleteOkay);
-void mthreadSleep(unsigned int jitterMsec);
 
 enum TCPAction : uint8_t
 {
@@ -764,9 +753,8 @@ struct PacketID
   PacketBuffer outMSG; // the outgoing message that needs to be sent
 
   using chain_t = set<uint16_t>;
-  mutable chain_t authReqChain;
+  mutable chain_t chain;
   shared_ptr<TCPIOHandler> tcphandler{nullptr};
-  timeval creationTime{};
   string::size_type inPos{0}; // how far are we along in the inMSG
   size_t inWanted{0}; // if this is set, we'll read until inWanted bytes are read
   string::size_type outPos{0}; // how far we are along in the outMSG

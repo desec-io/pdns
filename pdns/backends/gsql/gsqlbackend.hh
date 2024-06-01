@@ -42,10 +42,10 @@ public:
     d_db.reset();
   }
 
-  void setDB(std::unique_ptr<SSql>&& database)
+  void setDB(SSql *db)
   {
     freeStatements();
-    d_db = std::move(database);
+    d_db=std::unique_ptr<SSql>(db);
     if (d_db) {
       d_db->setLog(::arg().mustDo("query-logging"));
     }

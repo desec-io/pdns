@@ -8,20 +8,6 @@ Please upgrade to the PowerDNS Authoritative Server 4.0.0 from 3.4.2+.
 See the `3.X <https://doc.powerdns.com/3/authoritative/upgrading/>`__
 upgrade notes if your version is older than 3.4.2.
 
-4.9.0 to 5.0.0/master
----------------------
-
-LUA records whitespace insertion
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-:ref:`setting-lua-records-insert-whitespace`, introduced in 4.9.1 with the default value (``yes``) set to maintain the old behaviour of inserting whitespace, is set to ``no`` in 5.0.
-
-ixfrdist IPv6 support
-^^^^^^^^^^^^^^^^^^^^^
-
-``ixfrdist`` now binds listening sockets with `IPV6_V6ONLY set`, which means that ``[::]`` no longer accepts IPv4 connections.
-If you want to listen on both IPv4 and IPv6, you need to add a line with ``0.0.0.0`` to the ``listen`` section of your ixfrdist configuration.
-
 4.8.0 to 4.9.0
 --------------
 
@@ -36,10 +22,6 @@ Various settings, deprecated since 4.5.0, have been removed.
 * :ref:`setting-slave-renotify` is now :ref:`setting-secondary-do-renotify`
 * :ref:`setting-slave` is now :ref:`setting-secondary`
 * :ref:`setting-superslave` is now :ref:`setting-autosecondary`
-
-In :ref:`setting-lmdb-sync-mode`, the previous default ``mapasync`` is no longer a valid value.
-Due to a bug, it was interpreted as ``sync`` in previous versions.
-To avoid operational surprises, ``sync`` is the new default value.
 
 Renamed options
 ^^^^^^^^^^^^^^^
@@ -66,13 +48,6 @@ Various custom queries have been renamed.
 * ``info-all-master-query`` is now ``info-all-primary-query``
 
 Also, ``get-all-domains-query`` got an extra column for a zone's catalog assignment.
-
-API changes
-~~~~~~~~~~~
-
-A long time ago (in version 3.4.2), the ``priority`` field was removed from record content in the HTTP API.
-Starting with 4.9, API calls containing a ``priority`` field are actively rejected.
-This makes it easier for users to detect they are attempting to use a very old API client.
 
 any version to 4.8.x
 --------------------

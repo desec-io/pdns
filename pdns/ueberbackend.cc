@@ -20,14 +20,22 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 #include <memory>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 
 #include "auth-querycache.hh"
 #include "auth-zonecache.hh"
+#include "utility.hh"
 
+#include <cerrno>
 #include <dlfcn.h>
+#include <functional>
+#include <iostream>
 #include <map>
+#include <sstream>
 #include <string>
 #include <sys/types.h>
 
@@ -68,31 +76,24 @@ bool UeberBackend::loadmodule(const string& name)
 
 bool UeberBackend::loadModules(const vector<string>& modules, const string& path)
 {
-  g_log << Logger::Debug << "UeberBackend: path = " << path << endl;
-
   for (const auto& module : modules) {
     bool res = false;
-
-    g_log << Logger::Debug << "UeberBackend: Attempting to load module '" << module << "'" << endl;
 
     if (module.find('.') == string::npos) {
       auto fullPath = path;
       fullPath += "/lib";
       fullPath += module;
       fullPath += "backend.so";
-      g_log << Logger::Debug << "UeberBackend: Loading '" << fullPath << "'" << endl;
       res = UeberBackend::loadmodule(fullPath);
     }
     else if (module[0] == '/' || (module[0] == '.' && module[1] == '/') || (module[0] == '.' && module[1] == '.')) {
-      // Absolute path, Current path or Parent path
-      g_log << Logger::Debug << "UeberBackend: Loading '" << module << "'" << endl;
+      // absolute or current path
       res = UeberBackend::loadmodule(module);
     }
     else {
       auto fullPath = path;
       fullPath += "/";
       fullPath += module;
-      g_log << Logger::Debug << "UeberBackend: Loading '" << fullPath << "'" << endl;
       res = UeberBackend::loadmodule(fullPath);
     }
 
@@ -113,7 +114,7 @@ void UeberBackend::go()
   s_backendQueries = S.getPointer("backend-queries");
 
   {
-    std::unique_lock<std::mutex> lock(d_mut);
+    std::unique_lock<std::mutex> l(d_mut);
     d_go = true;
   }
   d_cond.notify_all();
@@ -605,10 +606,10 @@ bool UeberBackend::autoPrimariesList(std::vector<AutoPrimary>& primaries)
   return false;
 }
 
-bool UeberBackend::autoPrimaryBackend(const string& ipAddr, const DNSName& domain, const vector<DNSResourceRecord>& nsset, string* nameserver, string* account, DNSBackend** dnsBackend)
+bool UeberBackend::autoPrimaryBackend(const string& ip, const DNSName& domain, const vector<DNSResourceRecord>& nsset, string* nameserver, string* account, DNSBackend** dnsBackend)
 {
   for (auto& backend : backends) {
-    if (backend->autoPrimaryBackend(ipAddr, domain, nsset, nameserver, account, dnsBackend)) {
+    if (backend->autoPrimaryBackend(ip, domain, nsset, nameserver, account, dnsBackend)) {
       return true;
     }
   }
@@ -653,7 +654,6 @@ enum UeberBackend::CacheResult UeberBackend::cacheHas(const Question& question, 
 void UeberBackend::addNegCache(const Question& question) const
 {
   extern AuthQueryCache QC;
-
   if (d_negcache_ttl == 0) {
     return;
   }
@@ -709,8 +709,8 @@ void UeberBackend::lookup(const QType& qtype, const DNSName& qname, int zoneId, 
   DLOG(g_log << "UeberBackend received question for " << qtype << " of " << qname << endl);
   if (!d_go) {
     g_log << Logger::Error << "UeberBackend is blocked, waiting for 'go'" << endl;
-    std::unique_lock<std::mutex> lock(d_mut);
-    d_cond.wait(lock, [] { return d_go; });
+    std::unique_lock<std::mutex> l(d_mut);
+    d_cond.wait(l, [] { return d_go; });
     g_log << Logger::Error << "Broadcast received, unblocked" << endl;
   }
 

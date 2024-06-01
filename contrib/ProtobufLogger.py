@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
 import binascii
 import datetime
@@ -175,7 +175,7 @@ class PDNSPBConnHandler(object):
                 if (rrclass == 1 or rrclass == 255) and rr.HasField('rdata'):
                     if rrtype == 1:
                         rdatastr = socket.inet_ntop(socket.AF_INET, rr.rdata)
-                    elif rrtype in (5, 35, 64, 65):
+                    elif rrtype == 5:
                         rdatastr = rr.rdata
                     elif rrtype == 28:
                         rdatastr = socket.inet_ntop(socket.AF_INET6, rr.rdata)
@@ -245,21 +245,8 @@ class PDNSPBConnHandler(object):
         if msg.HasField('newlyObservedDomain'):
             nod = msg.newlyObservedDomain
 
-        workerId = 'N/A'
-        if msg.HasField('workerId'):
-           workerId = str(msg.workerId)
- 
-        pcCacheHit = 'N/A'
-        if msg.HasField('packetCacheHit'):
-           pcCacheHit = str(msg.packetCacheHit)
-
-        outgoingQs = 'N/A'
-        if msg.HasField('outgoingQueries'):
-           outgoingQs = str(msg.outgoingQueries)
-	
-
         print('[%s] %s of size %d: %s%s%s -> %s%s(%s) id: %d uuid: %s%s '
-                  'requestorid: %s deviceid: %s devicename: %s serverid: %s nod: %d workerId: %s pcCacheHit: %s outgoingQueries: %s' % (datestr,
+                  'requestorid: %s deviceid: %s devicename: %s serverid: %s nod: %d' % (datestr,
                                                     typestr,
                                                     msg.inBytes,
                                                     ipfromstr,
@@ -275,10 +262,7 @@ class PDNSPBConnHandler(object):
                                                     deviceId,
                                                     deviceName,
                                                     serveridstr,
-                                                    nod,
-                                                    workerId,
-                                                    pcCacheHit,
-                                                    outgoingQs))
+                                                    nod))
 
         for mt in msg.meta:
             values = ''

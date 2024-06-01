@@ -77,7 +77,7 @@ AC_DEFUN([PDNS_CHECK_LIBCRYPTO], [
             if test -f "$ssldir/include/openssl/crypto.h"; then
                 LIBCRYPTO_INCLUDES="-I$ssldir/include"
                 LIBCRYPTO_LDFLAGS="-L$ssldir/lib"
-                LIBCRYPTO_LIBS="-lcrypto"
+                LIBCRYPTO_LIBS="-lssl -lcrypto -loqs -lpthread -ldl"
                 found=true
                 AC_MSG_RESULT([yes])
                 break
@@ -91,6 +91,11 @@ AC_DEFUN([PDNS_CHECK_LIBCRYPTO], [
     fi
 
     if $found; then
+    	PKG_CHECK_MODULES([OPENSSL], [openssl >= 3.2], [
+  	AC_DEFINE([HAVE_OPENSSL], [1], [Define if OpenSSL is available and version is at least 3.2])
+	], [
+  		AC_MSG_ERROR([OpenSSL version 3.2 or newer is required but not found])
+	])
         AC_DEFINE([HAVE_LIBCRYPTO], [1], [Define to 1 if you have OpenSSL libcrypto])
     fi
 
@@ -123,7 +128,7 @@ AC_DEFUN([PDNS_CHECK_LIBCRYPTO], [
                            #include <openssl/kdf.h>])
             $1
         ], [
-            AC_MSG_RESULT([no])
+            AC_MSG_RESULT([no $LIBS])
             $2
         ])
     CPPFLAGS="$save_CPPFLAGS"

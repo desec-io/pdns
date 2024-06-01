@@ -48,7 +48,6 @@ struct DOH3Frontend
   ~DOH3Frontend();
 
   void setup();
-  void reloadCertificates();
 
   std::unique_ptr<DOH3ServerConfig> d_server_config;
   ComboAddress d_local;

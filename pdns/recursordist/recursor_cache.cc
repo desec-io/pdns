@@ -777,7 +777,7 @@ uint64_t MemRecursorCache::doDump(int fileDesc, size_t maxCacheEntries)
   if (newfd == -1) {
     return 0;
   }
-  auto filePtr = pdns::UniqueFilePtr(fdopen(newfd, "w"));
+  auto filePtr = std::unique_ptr<FILE, int (*)(FILE*)>(fdopen(newfd, "w"), fclose);
   if (!filePtr) { // dup probably failed
     close(newfd);
     return 0;

@@ -43,15 +43,15 @@ gSQLite3Backend::gSQLite3Backend(const std::string& mode, const std::string& suf
   GSQLBackend(mode, suffix)
 {
   try {
-    auto ptr = std::unique_ptr<SSql>(new SSQLite3(getArg("database"), getArg("pragma-journal-mode")));
+    SSQLite3* ptr = new SSQLite3(getArg("database"), getArg("pragma-journal-mode"));
+    setDB(ptr);
+    allocateStatements();
     if (!getArg("pragma-synchronous").empty()) {
       ptr->execute("PRAGMA synchronous=" + getArg("pragma-synchronous"));
     }
     if (mustDo("pragma-foreign-keys")) {
       ptr->execute("PRAGMA foreign_keys = 1");
     }
-    setDB(std::move(ptr));
-    allocateStatements();
   }
   catch (SSqlException& e) {
     g_log << Logger::Error << mode << ": connection failed: " << e.txtReason() << std::endl;
@@ -179,7 +179,7 @@ public:
   //! This reports us to the main UeberBackend class
   gSQLite3Loader()
   {
-    BackendMakers().report(std::make_unique<gSQLite3Factory>("gsqlite3"));
+    BackendMakers().report(new gSQLite3Factory("gsqlite3"));
     g_log << Logger::Info << "[gsqlite3] This is the gsqlite3 backend version " VERSION
 #ifndef REPRODUCIBLE
           << " (" __DATE__ " " __TIME__ ")"

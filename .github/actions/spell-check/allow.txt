@@ -2547,7 +2547,6 @@ pbegin
 pbf
 PBKDF
 PBpq
-pbr
 pbtag
 pcall
 PCDNSSEC
@@ -3145,7 +3144,6 @@ sched
 schemaversion
 scl
 sclo
-scm
 SCNu
 SCombo
 SConnect

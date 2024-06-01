@@ -158,7 +158,7 @@ private:
   int d_fd1[2]{}, d_fd2[2]{};
   int d_pid;
   int d_timeout;
-  pdns::UniqueFilePtr d_fp{nullptr};
+  std::unique_ptr<FILE, int (*)(FILE*)> d_fp{nullptr, fclose};
 };
 
 class RemoteBackend : public DNSBackend

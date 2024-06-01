@@ -525,20 +525,19 @@ BOOST_AUTO_TEST_CASE(test_dumpToFile)
   cache.add(genNegCacheEntry(DNSName("www1.powerdns.com"), DNSName("powerdns.com"), now));
   cache.add(genNegCacheEntry(DNSName("www2.powerdns.com"), DNSName("powerdns.com"), now));
 
-  auto filePtr = pdns::UniqueFilePtr(tmpfile());
-  if (!filePtr) {
+  auto fp = std::unique_ptr<FILE, int (*)(FILE*)>(tmpfile(), fclose);
+  if (!fp)
     BOOST_FAIL("Temporary file could not be opened");
-  }
 
-  cache.doDump(fileno(filePtr.get()), 0, now.tv_sec);
+  cache.doDump(fileno(fp.get()), 0, now.tv_sec);
 
-  rewind(filePtr.get());
+  rewind(fp.get());
   char* line = nullptr;
   size_t len = 0;
   ssize_t read;
 
   for (auto str : expected) {
-    read = getline(&line, &len, filePtr.get());
+    read = getline(&line, &len, fp.get());
     if (read == -1)
       BOOST_FAIL("Unable to read a line from the temp file");
     // The clock might have ticked so the 600 becomes 599

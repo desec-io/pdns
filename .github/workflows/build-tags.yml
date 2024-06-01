@@ -8,11 +8,6 @@ on:
     - 'dnsdist-*'
     - 'rec-*'
 
-permissions:
-  actions: read
-  id-token: write
-  contents: write
-
 jobs:
   call-build-packages-auth:
     uses: PowerDNS/pdns/.github/workflows/build-packages.yml@master

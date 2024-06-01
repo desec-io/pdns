@@ -136,11 +136,7 @@ Use the InnoDB READ-COMMITTED transaction isolation level. Default: yes.
 ``gmysql-ssl``
 ^^^^^^^^^^^^^^^^^^
 
-.. deprecated:: 5.0.0
-
-Before 5.0.0: Send the CLIENT_SSL capability flag to the server. SSL support is announced by the server via CLIENT_SSL and is enabled if the client returns the same capability. Default: no.
-
-5.0.0 and up: this option does nothing. Use ``gmysql-group`` and put your TLS settings in ``my.cnf``.
+Send the CLIENT_SSL capability flag to the server. SSL support is announced by the server via CLIENT_SSL and is enabled if the client returns the same capability. Default: no.
 
 .. _setting-gmysql-timeout:
 

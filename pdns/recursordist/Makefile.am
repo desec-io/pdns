@@ -14,7 +14,6 @@ AM_CPPFLAGS += \
 	-I$(top_srcdir)/ext/protozero/include \
 	-I$(top_srcdir)/settings \
 	-I$(top_builddir)/settings \
-	-I$(top_srcdir)/settings/rust/src \
 	$(YAHTTP_CFLAGS) \
 	$(LIBCRYPTO_INCLUDES) \
 	-DBOOST_CONTAINER_USE_STD_EXCEPTIONS
@@ -65,6 +64,7 @@ EXTRA_DIST = \
 	effective_tld_names.dat \
 	epollmplexer.cc \
 	kqueuemplexer.cc \
+	liboqssigners.cc liboqssigners.hh \
 	lua_hpp.mk \
 	malloctrace.cc malloctrace.hh \
 	mkpubsuffixcc \
@@ -142,6 +142,7 @@ pdns_recursor_SOURCES = \
 	ixfr.cc ixfr.hh \
 	json.cc json.hh \
 	lazy_allocator.hh \
+	liboqssigners.cc liboqssigners.hh \
 	libssl.cc libssl.hh \
 	lock.hh \
 	logger.hh logger.cc \
@@ -169,7 +170,6 @@ pdns_recursor_SOURCES = \
 	pubsuffixloader.cc \
 	qtype.hh qtype.cc \
 	query-local-address.hh query-local-address.cc \
-	ratelimitedlog.hh \
 	rcpgenerator.cc rcpgenerator.hh \
 	rec-carbon.cc \
 	rec-eventtrace.cc rec-eventtrace.hh \
@@ -178,7 +178,6 @@ pdns_recursor_SOURCES = \
 	rec-protozero.cc rec-protozero.hh \
 	rec-responsestats.hh rec-responsestats.cc \
 	rec-snmp.hh rec-snmp.cc \
-	rec-system-resolve.hh rec-system-resolve.cc \
 	rec-taskqueue.cc rec-taskqueue.hh \
 	rec-tcounters.cc rec-tcounters.hh \
 	rec-tcp.cc \
@@ -221,7 +220,6 @@ pdns_recursor_SOURCES = \
 	uuid-utils.hh uuid-utils.cc \
 	validate.cc validate.hh validate-recursor.cc validate-recursor.hh \
 	version.cc version.hh \
-	views.hh \
 	webserver.cc webserver.hh \
 	ws-api.cc ws-api.hh \
 	ws-recursor.cc ws-recursor.hh \
@@ -296,6 +294,7 @@ testrunner_SOURCES = \
 	gss_context.cc gss_context.hh \
 	iputils.cc iputils.hh \
 	ixfr.cc ixfr.hh \
+	liboqssigners.cc liboqssigners.hh \
 	logger.cc logger.hh \
 	logging.hh logging.cc logr.hh \
 	misc.cc misc.hh \
@@ -308,11 +307,9 @@ testrunner_SOURCES = \
 	pollmplexer.cc \
 	qtype.cc qtype.hh \
 	query-local-address.hh query-local-address.cc \
-	ratelimitedlog.hh \
 	rcpgenerator.cc \
 	rec-eventtrace.cc rec-eventtrace.hh \
 	rec-responsestats.hh rec-responsestats.cc \
-	rec-system-resolve.hh rec-system-resolve.cc \
 	rec-taskqueue.cc rec-taskqueue.hh \
 	rec-tcounters.cc rec-tcounters.hh \
 	rec-zonetocache.cc rec-zonetocache.hh \
@@ -326,7 +323,6 @@ testrunner_SOURCES = \
 	settings/cxxsupport.cc \
 	sholder.hh \
 	sillyrecords.cc \
-	sortlist.cc sortlist.hh \
 	sstuff.hh \
 	stable-bloom.hh \
 	svc-records.cc svc-records.hh \
@@ -355,7 +351,6 @@ testrunner_SOURCES = \
 	test-negcache_cc.cc \
 	test-packetcache_hh.cc \
 	test-rcpgenerator_cc.cc \
-	test-rec-system-resolve.cc \
 	test-rec-taskqueue.cc \
 	test-rec-tcounters_cc.cc \
 	test-rec-zonetocache.cc \
@@ -448,7 +443,6 @@ endif
 
 if LUA
 pdns_recursor_LDADD += $(LUA_LIBS)
-rec_control_LDADD += $(LUA_LIBS)
 testrunner_LDADD += $(LUA_LIBS)
 endif
 
@@ -510,30 +504,17 @@ endif
 
 rec_control_SOURCES = \
 	arguments.cc arguments.hh \
-	base32.cc base32.hh \
 	base64.cc base64.hh \
 	credentials.cc credentials.hh \
 	dnslabeltext.cc \
 	dnsname.hh dnsname.cc \
-	dnsparser.cc dnsparser.hh \
-	dnsrecords.cc dnsrecords.hh \
-	dnswriter.cc dnswriter.hh \
-	filterpo.cc filterpo.hh \
-	iputils.cc iputils.hh \
 	logger.cc \
 	logging.cc \
-	lua-base4.cc lua-base4.hh \
 	misc.cc \
-	nsecrecords.cc \
 	qtype.cc \
-	rcpgenerator.cc	rcpgenerator.hh \
-	rec-lua-conf.cc rec-lua-conf.hh \
 	rec_channel.cc rec_channel.hh \
 	rec_control.cc \
 	settings/cxxsupport.cc \
-	sillyrecords.cc \
-	sortlist.cc sortlist.hh \
-	svc-records.cc svc-records.hh \
 	unix_utility.cc
 
 nodist_rec_control_SOURCES = \

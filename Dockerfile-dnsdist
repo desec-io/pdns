@@ -21,7 +21,7 @@ COPY pdns /source/pdns
 COPY build-aux /source/build-aux
 COPY m4 /source/m4
 COPY ext /source/ext
-COPY builder/helpers/set-configure-ac-version.sh /usr/local/bin
+# COPY builder/helpers/set-configure-ac-version.sh /usr/local/bin
 COPY .git /source/.git
 
 # build and install (TODO: before we hit this line, rearrange /source structure if we are coming from a tarball)
@@ -42,20 +42,19 @@ RUN if [ "${DOCKER_FAKE_RELEASE}" = "YES" ]; then \
 
 
 RUN mkdir /libh2o && cd /libh2o && \
-      apt-get update && apt-get install -y cmake curl jq libssl-dev zlib1g-dev && \
-      cd /source/builder-support/helpers/ && \
-      ./install_h2o.sh
+      apt-get update && apt-get install -y cmake curl libssl-dev zlib1g-dev && \
+      curl -f -L https://github.com/PowerDNS/h2o/archive/refs/tags/v2.2.6+pdns2.tar.gz | tar xz && \
+      CFLAGS='-fPIC' cmake -DWITH_PICOTLS=off -DWITH_BUNDLED_SSL=off -DWITH_MRUBY=off -DCMAKE_INSTALL_PREFIX=/opt ./h2o-2.2.6-pdns2 && \
+      make install
 
 RUN mkdir /quiche && cd /quiche && \
     apt-get install -y libclang-dev && \
     apt-get clean && \
-    cd /source/builder-support/helpers/ && \
-    ./install_rust.sh && \
-    ./install_quiche.sh
+    /source/builder-support/helpers/install_rust.sh && \
+    /source/builder-support/helpers/install_quiche.sh
 
 RUN mkdir /build && \
     LUAVER=$([ -z "${NO_LUA_JIT##*$(dpkg --print-architecture)*}" ] && echo 'lua5.3' || echo 'luajit') && \
-    apt-get install -y lib${LUAVER}-*dev && \
     ./configure \
       --with-lua=${LUAVER} \
       LDFLAGS=-rdynamic \

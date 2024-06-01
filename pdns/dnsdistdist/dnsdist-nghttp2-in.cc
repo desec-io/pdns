@@ -222,10 +222,8 @@ void IncomingHTTP2Connection::handleResponse(const struct timeval& now, TCPRespo
 
 std::unique_ptr<DOHUnitInterface> IncomingHTTP2Connection::getDOHUnit(uint32_t streamID)
 {
-  if (streamID > std::numeric_limits<IncomingHTTP2Connection::StreamID>::max()) {
-    throw std::runtime_error("Invalid stream ID while retrieving DoH unit");
-  }
-
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): clang-tidy is getting confused by assert()
+  assert(streamID <= std::numeric_limits<IncomingHTTP2Connection::StreamID>::max());
   // NOLINTNEXTLINE(*-narrowing-conversions): generic interface between DNS and DoH with different types
   auto query = std::move(d_currentStreams.at(static_cast<IncomingHTTP2Connection::StreamID>(streamID)));
   return std::make_unique<IncomingDoHCrossProtocolContext>(std::move(query), std::dynamic_pointer_cast<IncomingHTTP2Connection>(shared_from_this()), streamID);
@@ -272,11 +270,6 @@ bool IncomingHTTP2Connection::checkALPN()
   const auto protocols = d_handler.getNextProtocol();
   if (protocols.size() == h2ALPN.size() && memcmp(protocols.data(), h2ALPN.data(), h2ALPN.size()) == 0) {
     return true;
-  }
-
-  constexpr std::array<uint8_t, 8> http11ALPN{'h', 't', 't', 'p', '/', '1', '.', '1'};
-  if (protocols.size() == http11ALPN.size() && memcmp(protocols.data(), http11ALPN.data(), http11ALPN.size()) == 0) {
-    ++d_ci.cs->dohFrontend->d_http1Stats.d_nbQueries;
   }
 
   const std::string data("HTTP/1.1 400 Bad Request\r\nConnection: Close\r\n\r\n<html><body>This server implements RFC 8484 - DNS Queries over HTTP, and requires HTTP/2 in accordance with section 5.2 of the RFC.</body></html>\r\n");
@@ -332,27 +325,6 @@ IOState IncomingHTTP2Connection::handleHandshake(const struct timeval& now)
   return iostate;
 }
 
-class ReadFunctionGuard
-{
-public:
-  ReadFunctionGuard(bool& inReadFunction) :
-    d_inReadFunctionRef(inReadFunction)
-  {
-    d_inReadFunctionRef = true;
-  }
-  ReadFunctionGuard(ReadFunctionGuard&&) = delete;
-  ReadFunctionGuard(const ReadFunctionGuard&) = delete;
-  ReadFunctionGuard& operator=(ReadFunctionGuard&&) = delete;
-  ReadFunctionGuard& operator=(const ReadFunctionGuard&) = delete;
-  ~ReadFunctionGuard()
-  {
-    d_inReadFunctionRef = false;
-  }
-
-private:
-  bool& d_inReadFunctionRef;
-};
-
 void IncomingHTTP2Connection::handleIO()
 {
   IOState iostate = IOState::Done;
@@ -370,9 +342,6 @@ void IncomingHTTP2Connection::handleIO()
     }
 
     if (d_state == State::starting) {
-      if (d_ci.cs != nullptr && d_ci.cs->dohFrontend != nullptr) {
-        ++d_ci.cs->dohFrontend->d_httpconnects;
-      }
       if (d_ci.cs != nullptr && d_ci.cs->d_enableProxyProtocol && isProxyPayloadOutsideTLS() && expectProxyProtocolFrom(d_ci.remote)) {
         d_state = State::readingProxyProtocolHeader;
         d_buffer.resize(s_proxyProtocolMinimumHeaderSize);
@@ -415,10 +384,10 @@ void IncomingHTTP2Connection::handleIO()
       }
     }
 
-    if (!d_inReadFunction && active() && !d_connectionClosing && (d_state == State::waitingForQuery || d_state == State::idle)) {
+    if (active() && !d_connectionClosing && (d_state == State::waitingForQuery || d_state == State::idle)) {
       do {
         iostate = readHTTPData();
-      } while (!d_inReadFunction && active() && !d_connectionClosing && iostate == IOState::Done);
+      } while (active() && !d_connectionClosing && iostate == IOState::Done);
     }
 
     if (!active()) {
@@ -553,9 +522,8 @@ void NGHTTP2Headers::addDynamicHeader(std::vector<nghttp2_nv>& headers, NGHTTP2H
 
 IOState IncomingHTTP2Connection::sendResponse(const struct timeval& now, TCPResponse&& response)
 {
-  if (response.d_idstate.d_streamID == -1) {
-    throw std::runtime_error("Invalid DoH stream ID while sending response");
-  }
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): clang-tidy is getting confused by assert()
+  assert(response.d_idstate.d_streamID != -1);
   auto& context = d_currentStreams.at(response.d_idstate.d_streamID);
 
   uint32_t statusCode = 200U;
@@ -571,9 +539,8 @@ IOState IncomingHTTP2Connection::sendResponse(const struct timeval& now, TCPResp
     responseBuffer = std::move(response.d_buffer);
   }
 
-  auto sent = responseBuffer.size();
   sendResponse(response.d_idstate.d_streamID, context, statusCode, d_ci.cs->dohFrontend->d_customResponseHeaders, contentType, sendContentType);
-  handleResponseSent(response, sent);
+  handleResponseSent(response);
 
   return hasPendingWrite() ? IOState::NeedWrite : IOState::Done;
 }
@@ -587,10 +554,8 @@ void IncomingHTTP2Connection::notifyIOError(const struct timeval& now, TCPRespon
     return;
   }
 
-  if (response.d_idstate.d_streamID == -1) {
-    throw std::runtime_error("Invalid DoH stream ID while handling I/O error notification");
-  }
-
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): clang-tidy is getting confused by assert()
+  assert(response.d_idstate.d_streamID != -1);
   auto& context = d_currentStreams.at(response.d_idstate.d_streamID);
   context.d_buffer = std::move(response.d_buffer);
   sendResponse(response.d_idstate.d_streamID, context, 502, d_ci.cs->dohFrontend->d_customResponseHeaders);
@@ -924,9 +889,6 @@ int IncomingHTTP2Connection::on_frame_recv_callback(nghttp2_session* session, co
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
   }
-  else if (frame->hd.type == NGHTTP2_PING) {
-    conn->d_needFlush = true;
-  }
 
   return 0;
 }
@@ -985,7 +947,7 @@ int IncomingHTTP2Connection::on_header_callback(nghttp2_session* session, const 
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
-#ifdef HAVE_NGHTTP2_CHECK_HEADER_VALUE_RFC9113
+#if HAVE_NGHTTP2_CHECK_HEADER_VALUE_RFC9113
     if (nghttp2_check_header_value_rfc9113(value, valuelen) == 0) {
       vinfolog("Invalid header value");
       return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1005,7 +967,7 @@ int IncomingHTTP2Connection::on_header_callback(nghttp2_session* session, const 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): nghttp2 API
     auto valueView = std::string_view(reinterpret_cast<const char*>(value), valuelen);
     if (headerMatches(s_pathHeaderName)) {
-#ifdef HAVE_NGHTTP2_CHECK_PATH
+#if HAVE_NGHTTP2_CHECK_PATH
       if (nghttp2_check_path(value, valuelen) == 0) {
         vinfolog("Invalid path value");
         return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1094,11 +1056,6 @@ int IncomingHTTP2Connection::on_error_callback(nghttp2_session* session, int lib
 
 IOState IncomingHTTP2Connection::readHTTPData()
 {
-  if (d_inReadFunction) {
-    return IOState::Done;
-  }
-  ReadFunctionGuard readGuard(d_inReadFunction);
-
   IOState newState = IOState::Done;
   size_t got = 0;
   if (d_in.size() < s_initialReceiveBufferSize) {
@@ -1142,9 +1099,7 @@ void IncomingHTTP2Connection::handleWritableIOCallback([[maybe_unused]] int desc
 
 void IncomingHTTP2Connection::stopIO()
 {
-  if (d_ioState) {
-    d_ioState->reset();
-  }
+  d_ioState->reset();
 }
 
 uint32_t IncomingHTTP2Connection::getConcurrentStreamsCount() const
@@ -1175,44 +1130,32 @@ boost::optional<struct timeval> IncomingHTTP2Connection::getIdleClientReadTTD(st
   return now;
 }
 
-void IncomingHTTP2Connection::updateIO(IOState newState, const timeval& now)
-{
-  (void)now;
-  updateIO(newState, newState == IOState::NeedWrite ? handleWritableIOCallback : handleReadableIOCallback);
-}
-
 void IncomingHTTP2Connection::updateIO(IOState newState, const FDMultiplexer::callbackfunc_t& callback)
 {
   boost::optional<struct timeval> ttd{boost::none};
 
-  if (newState == IOState::Async) {
-    auto shared = shared_from_this();
-    updateIOForAsync(shared);
-    return;
-  }
-
   auto shared = std::dynamic_pointer_cast<IncomingHTTP2Connection>(shared_from_this());
-  if (!shared || !d_ioState) {
-    return;
-  }
+  if (shared) {
+    struct timeval now
+    {
+    };
+    gettimeofday(&now, nullptr);
 
-  timeval now{};
-  gettimeofday(&now, nullptr);
-
-  if (newState == IOState::NeedRead) {
-    /* use the idle TTL if the handshake has been completed (and proxy protocol payload received, if any),
-       and we have processed at least one query, otherwise we use the shorter read TTL  */
-    if ((d_state == State::waitingForQuery || d_state == State::idle) && (d_queriesCount > 0 || d_currentQueriesCount > 0)) {
-      ttd = getIdleClientReadTTD(now);
+    if (newState == IOState::NeedRead) {
+      /* use the idle TTL if the handshake has been completed (and proxy protocol payload received, if any),
+         and we have processed at least one query, otherwise we use the shorter read TTL  */
+      if ((d_state == State::waitingForQuery || d_state == State::idle) && (d_queriesCount > 0 || d_currentQueriesCount > 0)) {
+        ttd = getIdleClientReadTTD(now);
+      }
+      else {
+        ttd = getClientReadTTD(now);
+      }
+      d_ioState->update(newState, callback, shared, ttd);
     }
-    else {
-      ttd = getClientReadTTD(now);
+    else if (newState == IOState::NeedWrite) {
+      ttd = getClientWriteTTD(now);
+      d_ioState->update(newState, callback, shared, ttd);
     }
-    d_ioState->update(newState, callback, shared, ttd);
-  }
-  else if (newState == IOState::NeedWrite) {
-    ttd = getClientWriteTTD(now);
-    d_ioState->update(newState, callback, shared, ttd);
   }
 }
 

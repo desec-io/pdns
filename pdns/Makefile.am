@@ -243,6 +243,7 @@ pdns_server_SOURCES = \
 	iputils.cc iputils.hh \
 	ixfr.cc ixfr.hh \
 	json.cc json.hh \
+	liboqssigners.cc liboqssigners.hh \
 	lock.hh \
 	logger.cc logger.hh \
 	logging.hh \
@@ -287,7 +288,6 @@ pdns_server_SOURCES = \
 	utility.hh \
 	uuid-utils.hh uuid-utils.cc \
 	version.cc version.hh \
-	views.hh \
 	webserver.cc webserver.hh \
 	ws-api.cc ws-api.hh \
 	ws-auth.cc ws-auth.hh \
@@ -377,6 +377,7 @@ pdnsutil_SOURCES = \
 	ipcipher.cc ipcipher.hh \
 	iputils.cc iputils.hh \
 	json.cc \
+	liboqssigners.cc liboqssigners.hh \
 	logger.cc \
 	lua-auth4.cc lua-auth4.hh \
 	lua-base4.cc lua-base4.hh \
@@ -717,28 +718,18 @@ endif
 
 ixfrdist_SOURCES = \
 	arguments.cc \
-	auth-caches.cc auth-caches.hh \
-	auth-packetcache.cc auth-packetcache.hh \
-	auth-querycache.cc auth-querycache.hh \
-	auth-zonecache.cc auth-zonecache.hh \
 	axfr-retriever.cc \
 	base32.cc \
 	base64.cc base64.hh \
 	credentials.cc credentials.hh \
 	dns.cc \
 	dns_random.hh \
-	dnsbackend.cc \
 	dnslabeltext.cc \
 	dnsname.cc dnsname.hh \
-	dnspacket.cc dnspacket.hh \
 	dnsparser.cc dnsparser.hh \
 	dnsrecords.cc \
 	dnssecinfra.cc \
 	dnswriter.cc dnswriter.hh \
-	ednscookies.cc ednscookies.hh \
-	ednsextendederror.cc ednsextendederror.hh \
-	ednsoptions.cc ednsoptions.hh \
-	ednssubnet.cc ednssubnet.hh \
 	gss_context.cc gss_context.hh \
 	iputils.hh iputils.cc \
 	ixfr.cc ixfr.hh \
@@ -755,14 +746,12 @@ ixfrdist_SOURCES = \
 	query-local-address.hh query-local-address.cc \
 	rcpgenerator.cc rcpgenerator.hh \
 	resolver.cc \
-	shuffle.cc shuffle.hh \
 	sillyrecords.cc \
 	sstuff.hh \
 	statbag.cc \
 	svc-records.cc svc-records.hh \
 	threadname.hh threadname.cc \
 	tsigverifier.cc tsigverifier.hh \
-	ueberbackend.cc ueberbackend.hh \
 	unix_utility.cc \
 	uuid-utils.hh uuid-utils.cc \
 	webserver.hh webserver.cc \
@@ -771,7 +760,6 @@ ixfrdist_SOURCES = \
 ixfrdist_LDADD = \
 	$(BOOST_PROGRAM_OPTIONS_LIBS) \
 	$(JSON11_LIBS) \
-	$(LIBDL) \
 	$(LIBCRYPTO_LIBS) \
 	$(YAHTTP_LIBS) \
 	$(YAML_LIBS)
@@ -808,8 +796,6 @@ ixplore_SOURCES = \
 	dnsrecords.cc \
 	dnssecinfra.cc \
 	dnswriter.cc dnswriter.hh \
-	ednsoptions.cc ednsoptions.hh \
-	ednssubnet.cc ednssubnet.hh \
 	gss_context.cc gss_context.hh  \
 	iputils.cc \
 	ixfr.cc ixfr.hh \
@@ -1378,6 +1364,7 @@ testrunner_SOURCES = \
 	ipcipher.cc ipcipher.hh \
 	iputils.cc \
 	ixfr.cc ixfr.hh \
+	liboqssigners.cc liboqssigners.hh \
 	logger.cc \
 	lua-auth4.hh lua-auth4.cc \
 	lua-base4.hh lua-base4.cc \

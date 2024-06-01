@@ -72,8 +72,9 @@ int ZeroMQConnector::send_message(const Json& input)
   auto line = input.dump();
   zmq_msg_t message;
 
-  zmq_msg_init_size(&message, line.size());
+  zmq_msg_init_size(&message, line.size() + 1);
   line.copy(reinterpret_cast<char*>(zmq_msg_data(&message)), line.size());
+  ((char*)zmq_msg_data(&message))[line.size()] = '\0';
 
   try {
     zmq_pollitem_t item;

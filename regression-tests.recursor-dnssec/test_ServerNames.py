@@ -108,10 +108,7 @@ version-string=%s
         response = self.sendUDPQuery(query)
 
         self.assertEqual(len(response.options), 1)
-        if dns.version.MAJOR < 2 or (dns.version.MAJOR == 2 and dns.version.MINOR < 6):
-            self.assertEqual(response.options[0].data, self._servername.encode('ascii'))
-        else:
-            self.assertEqual(response.options[0].to_text(), 'NSID ' + self._servername)
+        self.assertEqual(response.options[0].to_wire(), self._servername.encode('ascii'))
 
     def testNSIDTCP(self):
         """
@@ -122,7 +119,4 @@ version-string=%s
         response = self.sendTCPQuery(query)
 
         self.assertEqual(len(response.options), 1)
-        if dns.version.MAJOR < 2 or (dns.version.MAJOR == 2 and dns.version.MINOR < 6):
-            self.assertEqual(response.options[0].data, self._servername.encode('ascii'))
-        else:
-            self.assertEqual(response.options[0].to_text(), 'NSID ' + self._servername)
+        self.assertEqual(response.options[0].to_wire(), self._servername.encode('ascii'))

@@ -94,12 +94,11 @@ time_t g_starttime;
 string g_programname = "pdns"; // used in packethandler.cc
 
 const char* funnytext = "*****************************************************************************\n"
-                        "Ok, you just ran pdns-auth through 'strings' hoping to find funny messages.  \n"
-                        "Well, you found one.                                                         \n"
-                        "Two ions are flying through their particle accelerator, says the one to the  \n"
-                        "other 'I think I've lost an electron!'                                       \n"
-                        "So the other one says, 'Are you sure?'. 'YEAH! I'M POSITIVE!'                \n"
-                        "                                                                             \n"
+                        "Ok, you just ran pdns_server through 'strings' hoping to find funny messages.\n"
+                        "Well, you found one. \n"
+                        "Two ions are flying through their particle accelerator, says the one to the\n"
+                        "other 'I think I've lost an electron!' \n"
+                        "So the other one says, 'Are you sure?'. 'YEAH! I'M POSITIVE!'\n"
                         "                                            the pdns crew - pdns@powerdns.com\n"
                         "*****************************************************************************\n";
 
@@ -110,8 +109,6 @@ bool g_doLuaRecord;
 int g_luaRecordExecLimit;
 time_t g_luaHealthChecksInterval{5};
 time_t g_luaHealthChecksExpireDelay{3600};
-time_t g_luaConsistentHashesExpireDelay{86400};
-time_t g_luaConsistentHashesCleanupInterval{3600};
 #endif
 #ifdef ENABLE_GSS_TSIG
 bool g_doGssTSIG;
@@ -164,7 +161,6 @@ static void declareArguments()
   ::arg().setSwitch("dnsupdate", "Enable/Disable DNS update (RFC2136) support. Default is no.") = "no";
   ::arg().setSwitch("write-pid", "Write a PID file") = "yes";
   ::arg().set("allow-dnsupdate-from", "A global setting to allow DNS updates from these IP ranges.") = "127.0.0.0/8,::1";
-  ::arg().setSwitch("dnsupdate-require-tsig", "Require TSIG secured DNS updates. Default is no.") = "no";
   ::arg().set("proxy-protocol-from", "A Proxy Protocol header is only allowed from these subnets, and is mandatory then too.") = "";
   ::arg().set("proxy-protocol-maximum-size", "The maximum size of a proxy protocol payload, including the TLV values") = "512";
   ::arg().setSwitch("send-signed-notify", "Send TSIG secured NOTIFY if TSIG key is configured for a zone") = "yes";
@@ -197,7 +193,7 @@ static void declareArguments()
   ::arg().set("control-console", "Debugging switch - don't use") = "no"; // but I know you will!
   ::arg().set("loglevel", "Amount of logging. Higher is more. Do not set below 3") = "4";
   ::arg().setSwitch("loglevel-show", "Include log level indicator in log output") = "no";
-  ::arg().set("disable-syslog", "Disable logging to syslog, useful when running inside a supervisor that logs stderr") = "no";
+  ::arg().set("disable-syslog", "Disable logging to syslog, useful when running inside a supervisor that logs stdout") = "no";
   ::arg().set("log-timestamp", "Print timestamps in log lines") = "yes";
   ::arg().set("distributor-threads", "Default number of Distributor (backend) threads to start") = "3";
   ::arg().set("signing-threads", "Default number of signer threads to start") = "3";
@@ -309,12 +305,9 @@ static void declareArguments()
   ::arg().setSwitch("8bit-dns", "Allow 8bit dns queries") = "no";
 #ifdef HAVE_LUA_RECORDS
   ::arg().setSwitch("enable-lua-records", "Process LUA records for all zones (metadata overrides this)") = "no";
-  ::arg().setSwitch("lua-records-insert-whitespace", "Insert whitespace when combining LUA chunks") = "no";
   ::arg().set("lua-records-exec-limit", "LUA records scripts execution limit (instructions count). Values <= 0 mean no limit") = "1000";
   ::arg().set("lua-health-checks-expire-delay", "Stops doing health checks after the record hasn't been used for that delay (in seconds)") = "3600";
   ::arg().set("lua-health-checks-interval", "LUA records health checks monitoring interval in seconds") = "5";
-  ::arg().set("lua-consistent-hashes-cleanup-interval", "Pre-computed hashes cleanup interval (in seconds)") = "3600";
-  ::arg().set("lua-consistent-hashes-expire-delay", "Cleanup pre-computed hashes that haven't been used for the given delay (in seconds). See pickchashed() LUA function") = "86400";
 #endif
   ::arg().setSwitch("axfr-lower-serial", "Also AXFR a zone from a primary with a lower serial") = "no";
 
@@ -705,10 +698,7 @@ static void mainthread()
   g_doLuaRecord = ::arg().mustDo("enable-lua-records");
   g_LuaRecordSharedState = (::arg()["enable-lua-records"] == "shared");
   g_luaRecordExecLimit = ::arg().asNum("lua-records-exec-limit");
-  g_luaRecordInsertWhitespace = ::arg().mustDo("lua-records-insert-whitespace");
   g_luaHealthChecksInterval = ::arg().asNum("lua-health-checks-interval");
-  g_luaConsistentHashesExpireDelay = ::arg().asNum("lua-consistent-hashes-expire-delay");
-  g_luaConsistentHashesCleanupInterval = ::arg().asNum("lua-consistent-hashes-cleanup-interval");
   g_luaHealthChecksExpireDelay = ::arg().asNum("lua-health-checks-expire-delay");
 #endif
 #ifdef ENABLE_GSS_TSIG

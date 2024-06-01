@@ -29,34 +29,34 @@ std::unique_ptr<CrossProtocolQuery> getUDPCrossProtocolQueryFromDQ(DNSQuestion& 
 
 namespace dnsdist
 {
-std::unique_ptr<CrossProtocolQuery> getInternalQueryFromDQ(DNSQuestion& dnsQuestion, bool isResponse)
+std::unique_ptr<CrossProtocolQuery> getInternalQueryFromDQ(DNSQuestion& dq, bool isResponse)
 {
-  auto protocol = dnsQuestion.getProtocol();
+  auto protocol = dq.getProtocol();
   if (protocol == dnsdist::Protocol::DoUDP || protocol == dnsdist::Protocol::DNSCryptUDP) {
-    return getUDPCrossProtocolQueryFromDQ(dnsQuestion);
+    return getUDPCrossProtocolQueryFromDQ(dq);
   }
 #ifdef HAVE_DNS_OVER_HTTPS
   else if (protocol == dnsdist::Protocol::DoH) {
 #ifdef HAVE_LIBH2OEVLOOP
-    if (dnsQuestion.ids.cs->dohFrontend->d_library == "h2o") {
-      return getDoHCrossProtocolQueryFromDQ(dnsQuestion, isResponse);
+    if (dq.ids.cs->dohFrontend->d_library == "h2o") {
+      return getDoHCrossProtocolQueryFromDQ(dq, isResponse);
     }
 #endif /* HAVE_LIBH2OEVLOOP */
-    return getTCPCrossProtocolQueryFromDQ(dnsQuestion);
+    return getTCPCrossProtocolQueryFromDQ(dq);
   }
 #endif
 #ifdef HAVE_DNS_OVER_QUIC
   else if (protocol == dnsdist::Protocol::DoQ) {
-    return getDOQCrossProtocolQueryFromDQ(dnsQuestion, isResponse);
+    return getDOQCrossProtocolQueryFromDQ(dq, isResponse);
   }
 #endif
 #ifdef HAVE_DNS_OVER_HTTP3
   else if (protocol == dnsdist::Protocol::DoH3) {
-    return getDOH3CrossProtocolQueryFromDQ(dnsQuestion, isResponse);
+    return getDOH3CrossProtocolQueryFromDQ(dq, isResponse);
   }
 #endif
   else {
-    return getTCPCrossProtocolQueryFromDQ(dnsQuestion);
+    return getTCPCrossProtocolQueryFromDQ(dq);
   }
 }
 }

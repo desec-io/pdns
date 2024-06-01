@@ -20,8 +20,10 @@ GlobalStateHolder<SuffixMatchNode> g_DoTToAuthNames;
 std::unique_ptr<MemRecursorCache> g_recCache;
 std::unique_ptr<NegCache> g_negCache;
 bool g_lowercaseOutgoing = false;
-unsigned int g_networkTimeoutMsec = 1500;
-
+#if 0
+pdns::TaskQueue g_test_tasks;
+pdns::TaskQueue g_resolve_tasks;
+#endif
 /* Fake some required functions we didn't want the trouble to
    link with */
 ArgvMap& arg()
@@ -331,27 +333,9 @@ bool addRRSIG(const testkeysset_t& keys, std::vector<DNSRecord>& records, const 
     throw std::runtime_error("No DNSKEY found for " + signer.toLogString() + ", unable to compute the requested RRSIG");
   }
 
-  DNSName name;
-  uint16_t type{QType::ENT};
-  DNSResourceRecord::Place place{DNSResourceRecord::ANSWER};
-  uint32_t ttl{0};
-  bool found = false;
-
-  /* locate the last non-RRSIG record */
-  for (auto recordIterator = records.rbegin(); recordIterator != records.rend(); ++recordIterator) {
-    if (recordIterator->d_type != QType::RRSIG) {
-      name = recordIterator->d_name;
-      type = recordIterator->d_type;
-      place = recordIterator->d_place;
-      ttl = recordIterator->d_ttl;
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
-    throw std::runtime_error("Unable to locate the record that the RRSIG should cover");
-  }
+  size_t recordsCount = records.size();
+  const DNSName& name = records[recordsCount - 1].d_name;
+  const uint16_t type = records[recordsCount - 1].d_type;
 
   sortedRecords_t recordcontents;
   for (const auto& record : records) {
@@ -361,16 +345,16 @@ bool addRRSIG(const testkeysset_t& keys, std::vector<DNSRecord>& records, const 
   }
 
   RRSIGRecordContent rrc;
-  computeRRSIG(it->second.first, signer, wildcard ? *wildcard : name, type, ttl, sigValidity, rrc, recordcontents, algo, boost::none, now);
+  computeRRSIG(it->second.first, signer, wildcard ? *wildcard : records[recordsCount - 1].d_name, records[recordsCount - 1].d_type, records[recordsCount - 1].d_ttl, sigValidity, rrc, recordcontents, algo, boost::none, now);
   if (broken) {
     rrc.d_signature[0] ^= 42;
   }
 
   DNSRecord rec;
   rec.d_type = QType::RRSIG;
-  rec.d_place = place;
-  rec.d_name = name;
-  rec.d_ttl = ttl;
+  rec.d_place = records[recordsCount - 1].d_place;
+  rec.d_name = records[recordsCount - 1].d_name;
+  rec.d_ttl = records[recordsCount - 1].d_ttl;
 
   rec.setContent(std::make_shared<RRSIGRecordContent>(rrc));
   records.push_back(rec);
@@ -493,7 +477,7 @@ void generateKeyMaterial(const DNSName& name, unsigned int algo, uint8_t digest,
   keys[name] = std::pair<DNSSECPrivateKey, DSRecordContent>(dpk, ds);
 }
 
-void generateKeyMaterial(const DNSName& name, unsigned int algo, uint8_t digest, testkeysset_t& keys, map<DNSName, dsset_t>& dsAnchors)
+void generateKeyMaterial(const DNSName& name, unsigned int algo, uint8_t digest, testkeysset_t& keys, map<DNSName, dsmap_t>& dsAnchors)
 {
   generateKeyMaterial(name, algo, digest, keys);
   dsAnchors[name].insert(keys[name].second);

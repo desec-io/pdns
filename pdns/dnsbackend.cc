@@ -85,14 +85,18 @@ BackendMakerClass& BackendMakers()
   return bmc;
 }
 
-void BackendMakerClass::report(std::unique_ptr<BackendFactory>&& backendFactory)
+void BackendMakerClass::report(BackendFactory* backendFactory)
 {
-  d_repository[backendFactory->getName()] = std::move(backendFactory);
+  d_repository[backendFactory->getName()] = backendFactory;
 }
 
 void BackendMakerClass::clear()
 {
   d_instances.clear();
+  for (auto& repo : d_repository) {
+    delete repo.second;
+    repo.second = nullptr;
+  }
   d_repository.clear();
 }
 
@@ -124,22 +128,14 @@ void BackendMakerClass::load(const string& module)
 {
   bool res = false;
 
-  g_log << Logger::Debug << "BackendMakerClass: module = " << module << endl;
-  g_log << Logger::Debug << "BackendMakerClass: module-dir = " << arg()["module-dir"] << endl;
   if (module.find('.') == string::npos) {
-    auto modulePath = arg()["module-dir"] + "/lib" + module + "backend.so";
-    g_log << Logger::Debug << "BackendMakerClass: Loading '" << modulePath << "'" << endl;
-    res = UeberBackend::loadmodule(modulePath);
+    res = UeberBackend::loadmodule(arg()["module-dir"] + "/lib" + module + "backend.so");
   }
-  else if (module[0] == '/' || (module[0] == '.' && module[1] == '/') || (module[0] == '.' && module[1] == '.')) {
-    // Absolute path, Current path or Parent path
-    g_log << Logger::Debug << "BackendMakerClass: Loading '" << module << "'" << endl;
+  else if (module[0] == '/' || (module[0] == '.' && module[1] == '/') || (module[0] == '.' && module[1] == '.')) { // absolute or current path
     res = UeberBackend::loadmodule(module);
   }
   else {
-    auto modulePath = arg()["module-dir"] + "/" + module;
-    g_log << Logger::Debug << "BackendMakerClass: Loading '" << modulePath << "'" << endl;
-    res = UeberBackend::loadmodule(modulePath);
+    res = UeberBackend::loadmodule(arg()["module-dir"] + "/" + module);
   }
 
   if (!res) {
@@ -203,7 +199,7 @@ vector<std::unique_ptr<DNSBackend>> BackendMakerClass::all(bool metadataOnly)
   try {
     for (const auto& instance : d_instances) {
       current = instance.first + instance.second;
-      const auto& repo = d_repository[instance.first];
+      auto* repo = d_repository[instance.first];
       std::unique_ptr<DNSBackend> made{metadataOnly ? repo->makeMetadataOnly(instance.second) : repo->make(instance.second)};
       if (made == nullptr) {
         throw PDNSException("Unable to launch backend '" + instance.first + "'");

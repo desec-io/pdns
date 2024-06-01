@@ -214,7 +214,6 @@ static void fillZone(const DNSName& zonename, HttpResponse* resp)
     {"kind", zone.d_servers.empty() ? "Native" : "Forwarded"},
     {"servers", servers},
     {"recursion_desired", zone.d_servers.empty() ? false : zone.d_rdForward},
-    {"notify_allowed", isAllowNotifyForZone(zonename)},
     {"records", records}};
 
   resp->setJsonBody(doc);
@@ -233,7 +232,6 @@ static void doCreateZone(const Json& document)
   string singleIPTarget = document["single_target_ip"].string_value();
   string kind = toUpper(stringFromJson(document, "kind"));
   bool rdFlag = boolFromJson(document, "recursion_desired");
-  bool notifyAllowed = boolFromJson(document, "notify_allowed", false);
   string confbasename = "zone-" + apiZoneNameToId(zone);
 
   const string yamlAPiZonesFile = ::arg()["api-config-dir"] + "/apizones";
@@ -282,7 +280,7 @@ static void doCreateZone(const Json& document)
       pdns::rust::settings::rec::ForwardZone forward;
       forward.zone = zonename;
       forward.recurse = rdFlag;
-      forward.notify_allowed = notifyAllowed;
+      forward.notify_allowed = false;
       for (const auto& value : document["servers"].array_items()) {
         forward.forwarders.emplace_back(value.string_value());
       }
@@ -310,12 +308,11 @@ static void doCreateZone(const Json& document)
         throw ApiException("Need at least one upstream server when forwarding");
       }
 
-      const string notifyAllowedConfig = notifyAllowed ? "\nallow-notify-for+=" + zonename : "";
       if (rdFlag) {
-        apiWriteConfigFile(confbasename, "forward-zones-recurse+=" + zonename + "=" + serverlist + notifyAllowedConfig);
+        apiWriteConfigFile(confbasename, "forward-zones-recurse+=" + zonename + "=" + serverlist);
       }
       else {
-        apiWriteConfigFile(confbasename, "forward-zones+=" + zonename + "=" + serverlist + notifyAllowedConfig);
+        apiWriteConfigFile(confbasename, "forward-zones+=" + zonename + "=" + serverlist);
       }
     }
   }
@@ -1249,14 +1246,6 @@ const std::map<std::string, MetricDefinition> MetricDefinitionStorage::d_metrics
   {"udr-events",
    MetricDefinition(PrometheusMetricType::counter,
                     "Count of UDR events")},
-
-  {"max-chain-length",
-   MetricDefinition(PrometheusMetricType::counter,
-                    "Maximum chain length")},
-
-  {"max-chain-weight",
-   MetricDefinition(PrometheusMetricType::counter,
-                    "Maximum chain weight")},
 };
 
 constexpr bool CHECK_PROMETHEUS_METRICS = false;

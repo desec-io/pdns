@@ -162,7 +162,7 @@ dnsdist_SOURCES = \
 	dnsdist-ecs.cc dnsdist-ecs.hh \
 	dnsdist-edns.cc dnsdist-edns.hh \
 	dnsdist-healthchecks.cc dnsdist-healthchecks.hh \
-	dnsdist-idstate.cc dnsdist-idstate.hh \
+	dnsdist-idstate.hh \
 	dnsdist-internal-queries.cc dnsdist-internal-queries.hh \
 	dnsdist-kvs.hh dnsdist-kvs.cc \
 	dnsdist-lbpolicies.cc dnsdist-lbpolicies.hh \
@@ -178,7 +178,6 @@ dnsdist_SOURCES = \
 	dnsdist-lua-bindings.cc \
 	dnsdist-lua-ffi-interface.h dnsdist-lua-ffi-interface.inc \
 	dnsdist-lua-ffi.cc dnsdist-lua-ffi.hh \
-	dnsdist-lua-hooks.cc dnsdist-lua-hooks.hh \
 	dnsdist-lua-inspection-ffi.cc dnsdist-lua-inspection-ffi.h \
 	dnsdist-lua-inspection.cc \
 	dnsdist-lua-network.cc dnsdist-lua-network.hh \
@@ -197,7 +196,6 @@ dnsdist_SOURCES = \
 	dnsdist-random.cc dnsdist-random.hh \
 	dnsdist-resolver.cc dnsdist-resolver.hh \
 	dnsdist-rings.cc dnsdist-rings.hh \
-	dnsdist-rule-chains.cc dnsdist-rule-chains.hh \
 	dnsdist-rules.cc dnsdist-rules.hh \
 	dnsdist-secpoll.cc dnsdist-secpoll.hh \
 	dnsdist-session-cache.cc dnsdist-session-cache.hh \
@@ -208,6 +206,7 @@ dnsdist_SOURCES = \
 	dnsdist-tcp-upstream.hh \
 	dnsdist-tcp.cc dnsdist-tcp.hh \
 	dnsdist-web.cc dnsdist-web.hh \
+	dnsdist-xpf.cc dnsdist-xpf.hh \
 	dnsdist-xsk.cc dnsdist-xsk.hh \
 	dnsdist.cc dnsdist.hh \
 	dnslabeltext.cc \
@@ -256,7 +255,7 @@ dnsdist_SOURCES = \
 	tcpiohandler.cc tcpiohandler.hh \
 	threadname.hh threadname.cc \
 	uuid-utils.hh uuid-utils.cc \
-	views.hh \
+	xpf.cc xpf.hh \
 	xsk.cc xsk.hh
 
 testrunner_SOURCES = \
@@ -282,7 +281,7 @@ testrunner_SOURCES = \
 	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
 	dnsdist-ecs.cc dnsdist-ecs.hh \
 	dnsdist-edns.cc dnsdist-edns.hh \
-	dnsdist-idstate.cc dnsdist-idstate.hh \
+	dnsdist-idstate.hh \
 	dnsdist-kvs.cc dnsdist-kvs.hh \
 	dnsdist-lbpolicies.cc dnsdist-lbpolicies.hh \
 	dnsdist-lua-bindings-dnsquestion.cc \
@@ -301,12 +300,12 @@ testrunner_SOURCES = \
 	dnsdist-random.cc dnsdist-random.hh \
 	dnsdist-resolver.cc dnsdist-resolver.hh \
 	dnsdist-rings.cc dnsdist-rings.hh \
-	dnsdist-rule-chains.cc dnsdist-rule-chains.hh \
 	dnsdist-rules.cc dnsdist-rules.hh \
 	dnsdist-session-cache.cc dnsdist-session-cache.hh \
 	dnsdist-svc.cc dnsdist-svc.hh \
 	dnsdist-tcp-downstream.cc \
 	dnsdist-tcp.cc dnsdist-tcp.hh \
+	dnsdist-xpf.cc dnsdist-xpf.hh \
 	dnsdist-xsk.cc dnsdist-xsk.hh \
 	dnsdist.hh \
 	dnslabeltext.cc \
@@ -365,6 +364,7 @@ testrunner_SOURCES = \
 	testrunner.cc \
 	threadname.hh threadname.cc \
 	uuid-utils.hh uuid-utils.cc \
+	xpf.cc xpf.hh \
 	xsk.cc xsk.hh
 
 dnsdist_LDFLAGS = \

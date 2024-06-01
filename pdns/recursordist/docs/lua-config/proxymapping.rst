@@ -8,18 +8,18 @@ If the :ref:`setting-proxy-protocol-from` is also used, the substitution is done
 
 Depending on context, the incoming address can be
 
-The interface address ``I``
-  the source network interface address of the client
+The physical address ``P``
+  the physical address the query is received on.
 The source address ``S``
   the source address as specified in the Proxy protocol
 The mapped address ``M``
   the source address mapped by Table Based Proxy Mapping
 
-``S equals I`` if no Proxy Protocol is used.
+``S equals P`` if no Proxy Protocol is used.
 
 ``M equals S`` if no Table Based Proxy Mapping is used.
 
-``I`` determines if the Proxy Protocol is used (:ref:`setting-proxy-protocol-from`).
+``P`` determines if the Proxy Protocol is used (:ref:`setting-proxy-protocol-from`).
 
 ``S`` is passed to Lua functions and RPZ processing
 
@@ -43,7 +43,6 @@ See :func:`protobufServer` on how to tune the source address logged in ``Protobu
 .. function:: addProxyMapping(subnet, ip [, domains])
 
   .. versionadded:: 4.7.0
-  .. versionadded:: 5.1.0 Alternative equivalent YAML setting: :ref:`setting-yaml-incoming.proxymappings`.
 
   Specify a table based mapping for a subnet.
 

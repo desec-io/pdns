@@ -19,7 +19,6 @@ These chapters contain information on the advanced features of dnsdist
    multiple-instance
    out-of-order
    ocsp-stapling
-   tls-certificates-management
    tls-sessions-management
    internal-design
    asynchronous-processing

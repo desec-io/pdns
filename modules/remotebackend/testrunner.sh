@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-set -eu
-
 new_api=0
-mode=${1-}
+mode=$1
 
-progdir=${abs_srcdir-$PWD}
-
-if [ ! -d venv ]; then
-  flock .create_testenv bash -c "python3 -m venv venv && source venv/bin/activate && pip install wheel && pip install -r ${progdir}/requirements.txt"
-  rm .create_testenv
-fi
-
-source venv/bin/activate
+# keep the original arguments for new test harness api
+orig="$*"
 
 # we could be ran with new API
-while [ "${1-}" != "" ]
+while [ "$1" != "" ]
 do
  if [ "$1" == "--" ]; then
    new_api=1
@@ -24,35 +16,34 @@ do
  shift
 done
 
-httpd_pid=""
+webrick_pid=""
 socat_pid=""
 zeromq_pid=""
 socat=$(which socat)
 
 function start_web() {
-  local service_logfile="${mode_name%\.test}_server.log"
+  local service_logfile="${mode%\.test}_server.log"
 
-  ${progdir}/unittest_"${1}".py >> "${service_logfile}" 2>&1 &
-  httpd_pid=$!
+  ./unittest_${1}.rb >> ${service_logfile} 2>&1 &
+  webrick_pid=$!
 
   local timeout=0
   while [ ${timeout} -lt 20 ]; do
-    local res
-    res=$(curl http://localhost:62434/ping 2>/dev/null || true)
-    if [ "$res" == "pong" ]; then
+    local res=$(curl http://localhost:62434/ping 2>/dev/null)
+    if [ "x$res" == "xpong" ]; then
       # server is up and running
       return 0
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
-  if kill -0 ${httpd_pid} 2>/dev/null; then
+  if kill -0 ${webrick_pid} 2>/dev/null; then
     # if something is wrong with curl (i.e. curl isn't installed, localhost is firewalled ...)
     # the status check will fail -- cleanup required!
     echo >&2 "WARNING: Timeout (${timeout}s) reached: \"${1}\" test service process is running but status check failed"
-    kill -KILL ${httpd_pid} 2>/dev/null
+    kill -KILL ${webrick_pid} 2>/dev/null
   fi
 
   echo >&2 "ERROR: A timeout (${timeout}s) was reached while waiting for \"${1}\" test service to start!"
@@ -61,33 +52,33 @@ function start_web() {
 }
 
 function stop_web() {
-  if [ -z "${httpd_pid}" ]; then
+  if [ -z "${webrick_pid}" ]; then
     # should never happen - why was stop_web() called?
     echo >&2 "ERROR: Unable to stop \"${1}\" test service: Did we ever start the service?"
     exit 99
   fi
 
-  if ! kill -0 ${httpd_pid} 2>/dev/null; then
+  if ! kill -0 ${webrick_pid} 2>/dev/null; then
     # should never happen - did the test crashed the service?
-    echo >&2 "ERROR: Unable to stop \"${1}\" test service: service (${httpd_pid}) not running"
+    echo >&2 "ERROR: Unable to stop \"${1}\" test service: service (${webrick_pid}) not running"
     exit 69
   fi
 
-  kill -TERM ${httpd_pid}
+  kill -TERM ${webrick_pid}
   local timeout=0
   while [ ${timeout} -lt 5 ]; do
-    if ! kill -0 ${httpd_pid} 2>/dev/null; then
+    if ! kill -0 ${webrick_pid} 2>/dev/null; then
       # service was stopped
       return 0
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
-  if kill -0 ${httpd_pid} 2>/dev/null; then
+  if kill -0 ${webrick_pid} 2>/dev/null; then
     echo >&2 "WARNING: Timeout (${timeout}s) reached - killing \"${1}\" test service ..."
-    kill -KILL ${httpd_pid} 2>/dev/null
+    kill -KILL ${webrick_pid} 2>/dev/null
     return $?
   fi
 }
@@ -98,11 +89,10 @@ function start_zeromq() {
     exit 77
   fi
 
-  local service_logfile="${mode_name%\.test}_server.log"
+  local service_logfile="${mode%\.test}_server.log"
 
-  ${progdir}/unittest_zeromq.py >> "${service_logfile}" 2>&1 &
+  ./unittest_zeromq.rb >> ${service_logfile} 2>&1 &
   zeromq_pid=$!
-  echo "ZeroMQ running as $zeromq_pid"
 
   local timeout=0
   while [ ${timeout} -lt 5 ]; do
@@ -112,7 +102,7 @@ function start_zeromq() {
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
   if kill -0 ${zeromq_pid} 2>/dev/null; then
@@ -148,7 +138,7 @@ function stop_zeromq() {
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
   if kill -0 ${zeromq_pid} 2>/dev/null; then
@@ -159,12 +149,12 @@ function stop_zeromq() {
 }
 
 function start_unix() {
-  if [ -z "$socat" ] || [ ! -x "$socat" ]; then
+  if [ -z "$socat" -o ! -x "$socat" ]; then
     echo "INFO: Skipping \"UNIX socket\" test because \"socat\" executable wasn't found!"
     exit 77
   fi
 
-  $socat unix-listen:/tmp/remotebackend.sock exec:${progdir}/unittest_pipe.py &
+  $socat unix-listen:/tmp/remotebackend.sock exec:./unittest_pipe.rb &
   socat_pid=$!
 
   local timeout=0
@@ -175,7 +165,7 @@ function start_unix() {
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
   if kill -0 ${socat_pid} 2>/dev/null; then
@@ -209,7 +199,7 @@ function stop_unix() {
     fi
 
     sleep 1
-    (( timeout=timeout+1 ))
+    let timeout=timeout+1
   done
 
   if kill -0 ${socat_pid} 2>/dev/null; then
@@ -220,17 +210,16 @@ function stop_unix() {
 }
 
 function run_test() {
- rv=0
  if [ $new_api -eq 0 ]; then
-   ./"$mode_name" || rv=$?
+   ./$mode
  else
-   $mode || rv=$?
+    $orig
  fi
 }
 
-mode_name=$(basename "$mode")
+mode=`basename "$mode"`
 
-case "$mode_name" in
+case "$mode" in
   remotebackend_pipe.test)
     run_test
   ;;
@@ -265,4 +254,4 @@ case "$mode_name" in
   ;;
 esac
 
-exit $rv
+exit $?

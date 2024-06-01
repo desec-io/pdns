@@ -51,8 +51,8 @@ using namespace dnsdist::doq;
 class Connection
 {
 public:
-  Connection(const ComboAddress& peer, const ComboAddress& localAddr, QuicheConfig config, QuicheConnection conn) :
-    d_peer(peer), d_localAddr(localAddr), d_conn(std::move(conn)), d_config(std::move(config))
+  Connection(const ComboAddress& peer, QuicheConnection&& conn) :
+    d_peer(peer), d_conn(std::move(conn))
   {
   }
   Connection(const Connection&) = delete;
@@ -62,10 +62,7 @@ public:
   ~Connection() = default;
 
   ComboAddress d_peer;
-  ComboAddress d_localAddr;
   QuicheConnection d_conn;
-  QuicheConfig d_config;
-
   std::unordered_map<uint64_t, PacketBuffer> d_streamBuffers;
   std::unordered_map<uint64_t, PacketBuffer> d_streamOutBuffers;
 };
@@ -136,8 +133,8 @@ public:
 
     if (!response.isAsync()) {
 
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::ResponseRules).getLocal();
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localCacheInsertedRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::CacheInsertedResponseRules).getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localRespRuleActions = g_respruleactions.getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localCacheInsertedRespRuleActions = g_cacheInsertedRespRuleActions.getLocal();
 
       dnsResponse.ids.doqu = std::move(unit);
 
@@ -306,14 +303,6 @@ void DOQFrontend::setup()
   d_server_config = std::make_unique<DOQServerConfig>(std::move(config), d_internalPipeBufferSize);
 }
 
-void DOQFrontend::reloadCertificates()
-{
-  auto config = QuicheConfig(quiche_config_new(QUICHE_PROTOCOL_VERSION), quiche_config_free);
-  d_quicheParams.d_alpn = std::string(DOQ_ALPN.begin(), DOQ_ALPN.end());
-  configureQuiche(config, d_quicheParams, false);
-  std::atomic_store_explicit(&d_server_config->config, std::move(config), std::memory_order_release);
-}
-
 static std::optional<std::reference_wrapper<Connection>> getConnection(DOQServerConfig::ConnectionsMap& connMap, const PacketBuffer& connID)
 {
   auto iter = connMap.find(connID);
@@ -339,25 +328,24 @@ static void sendBackDOQUnit(DOQUnitUniquePtr&& unit, const char* description)
   }
 }
 
-static std::optional<std::reference_wrapper<Connection>> createConnection(DOQServerConfig& config, const PacketBuffer& serverSideID, const PacketBuffer& originalDestinationID, const ComboAddress& peer, const ComboAddress& localAddr)
+static std::optional<std::reference_wrapper<Connection>> createConnection(DOQServerConfig& config, const PacketBuffer& serverSideID, const PacketBuffer& originalDestinationID, const ComboAddress& local, const ComboAddress& peer)
 {
-  auto quicheConfig = std::atomic_load_explicit(&config.config, std::memory_order_acquire);
   auto quicheConn = QuicheConnection(quiche_accept(serverSideID.data(), serverSideID.size(),
                                                    originalDestinationID.data(), originalDestinationID.size(),
                                                    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-                                                   reinterpret_cast<const struct sockaddr*>(&localAddr),
-                                                   localAddr.getSocklen(),
+                                                   reinterpret_cast<const struct sockaddr*>(&local),
+                                                   local.getSocklen(),
                                                    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
                                                    reinterpret_cast<const struct sockaddr*>(&peer),
                                                    peer.getSocklen(),
-                                                   quicheConfig.get()),
+                                                   config.config.get()),
                                      quiche_conn_free);
 
   if (config.df && !config.df->d_quicheParams.d_keyLogFile.empty()) {
     quiche_conn_set_keylog_path(quicheConn.get(), config.df->d_quicheParams.d_keyLogFile.c_str());
   }
 
-  auto conn = Connection(peer, localAddr, std::move(quicheConfig), std::move(quicheConn));
+  auto conn = Connection(peer, std::move(quicheConn));
   auto pair = config.d_connections.emplace(serverSideID, std::move(conn));
   return pair.first->second;
 }
@@ -642,7 +630,7 @@ static void handleReadableStream(DOQFrontend& frontend, ClientState& clientState
     return;
   }
   DEBUGLOG("Dispatching query");
-  doq_dispatch_query(*(frontend.d_server_config), std::move(streamBuffer), conn.d_localAddr, client, serverConnID, streamID);
+  doq_dispatch_query(*(frontend.d_server_config), std::move(streamBuffer), clientState.local, client, serverConnID, streamID);
   conn.d_streamBuffers.erase(streamID);
 }
 
@@ -655,21 +643,10 @@ static void handleSocketReadable(DOQFrontend& frontend, ClientState& clientState
   PacketBuffer tokenBuf;
   while (true) {
     ComboAddress client;
-    ComboAddress localAddr;
-    client.sin4.sin_family = clientState.local.sin4.sin_family;
-    localAddr.sin4.sin_family = clientState.local.sin4.sin_family;
     buffer.resize(4096);
-    if (!dnsdist::doq::recvAsync(sock, buffer, client, localAddr)) {
+    if (!sock.recvFromAsync(buffer, client) || buffer.empty()) {
       return;
     }
-    if (localAddr.sin4.sin_family == 0) {
-      localAddr = clientState.local;
-    }
-    else {
-      /* we don't get the port, only the address */
-      localAddr.sin4.sin_port = clientState.local.sin4.sin_port;
-    }
-
     DEBUGLOG("Received DoQ datagram of size " << buffer.size() << " from " << client.toStringWithPort());
 
     uint32_t version{0};
@@ -697,22 +674,17 @@ static void handleSocketReadable(DOQFrontend& frontend, ClientState& clientState
 
     if (!conn) {
       DEBUGLOG("Connection not found");
-      if (type != static_cast<uint8_t>(DOQ_Packet_Types::QUIC_PACKET_TYPE_INITIAL)) {
-        DEBUGLOG("Packet is not initial");
-        continue;
-      }
-
       if (!quiche_version_is_supported(version)) {
         DEBUGLOG("Unsupported version");
         ++frontend.d_doqUnsupportedVersionErrors;
-        handleVersionNegociation(sock, clientConnID, serverConnID, client, localAddr, buffer);
+        handleVersionNegociation(sock, clientConnID, serverConnID, client, buffer);
         continue;
       }
 
       if (token_len == 0) {
         /* stateless retry */
         DEBUGLOG("No token received");
-        handleStatelessRetry(sock, clientConnID, serverConnID, client, localAddr, version, buffer);
+        handleStatelessRetry(sock, clientConnID, serverConnID, client, version, buffer);
         continue;
       }
 
@@ -725,7 +697,7 @@ static void handleSocketReadable(DOQFrontend& frontend, ClientState& clientState
       }
 
       DEBUGLOG("Creating a new connection");
-      conn = createConnection(*frontend.d_server_config, serverConnID, *originalDestinationID, client, localAddr);
+      conn = createConnection(*frontend.d_server_config, serverConnID, *originalDestinationID, clientState.local, client);
       if (!conn) {
         continue;
       }
@@ -736,8 +708,8 @@ static void handleSocketReadable(DOQFrontend& frontend, ClientState& clientState
       reinterpret_cast<struct sockaddr*>(&client),
       client.getSocklen(),
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      reinterpret_cast<struct sockaddr*>(&localAddr),
-      localAddr.getSocklen(),
+      reinterpret_cast<struct sockaddr*>(&clientState.local),
+      clientState.local.getSocklen(),
     };
 
     auto done = quiche_conn_recv(conn->get().d_conn.get(), buffer.data(), buffer.size(), &recv_info);
@@ -753,7 +725,7 @@ static void handleSocketReadable(DOQFrontend& frontend, ClientState& clientState
         handleReadableStream(frontend, clientState, *conn, streamID, client, serverConnID);
       }
 
-      flushEgress(sock, conn->get().d_conn, client, localAddr, buffer);
+      flushEgress(sock, conn->get().d_conn, client, buffer);
     }
     else {
       DEBUGLOG("Connection not established");
@@ -798,7 +770,7 @@ void doqThread(ClientState* clientState)
         for (auto conn = frontend->d_server_config->d_connections.begin(); conn != frontend->d_server_config->d_connections.end();) {
           quiche_conn_on_timeout(conn->second.d_conn.get());
 
-          flushEgress(sock, conn->second.d_conn, conn->second.d_peer, conn->second.d_localAddr, buffer);
+          flushEgress(sock, conn->second.d_conn, conn->second.d_peer, buffer);
 
           if (quiche_conn_is_closed(conn->second.d_conn.get())) {
 #ifdef DEBUGLOG_ENABLED

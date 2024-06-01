@@ -35,6 +35,11 @@
 #include "dnsdist-tcp-upstream.hh"
 
 GlobalStateHolder<NetmaskGroup> g_ACL;
+GlobalStateHolder<vector<DNSDistRuleAction> > g_ruleactions;
+GlobalStateHolder<vector<DNSDistResponseRuleAction> > g_respruleactions;
+GlobalStateHolder<vector<DNSDistResponseRuleAction> > g_cachehitrespruleactions;
+GlobalStateHolder<vector<DNSDistResponseRuleAction> > g_cacheInsertedRespRuleActions;
+GlobalStateHolder<vector<DNSDistResponseRuleAction> > g_selfansweredrespruleactions;
 GlobalStateHolder<servers_t> g_dstates;
 
 QueryCount g_qcount;
@@ -78,10 +83,10 @@ bool responseContentMatches(const PacketBuffer& response, const DNSName& qname, 
 
 static std::function<bool(PacketBuffer& response, DNSResponse& dr, bool muted)> s_processResponse;
 
-bool processResponse(PacketBuffer& response, const std::vector<dnsdist::rules::ResponseRuleAction>& respRuleActions, const std::vector<dnsdist::rules::ResponseRuleAction>& cacheInsertedRespRuleActions, DNSResponse& dnsResponse, bool muted)
+bool processResponse(PacketBuffer& response, const std::vector<DNSDistResponseRuleAction>& localRespRuleActions, const std::vector<DNSDistResponseRuleAction>& localCacheInsertedRespRuleActions, DNSResponse& dr, bool muted)
 {
   if (s_processResponse) {
-    return s_processResponse(response, dnsResponse, muted);
+    return s_processResponse(response, dr, muted);
   }
 
   return false;
@@ -3619,8 +3624,8 @@ BOOST_FIXTURE_TEST_CASE(test_IncomingConnectionOOOR_BackendOOOR, TestFixture)
     g_tcpRecvTimeout = 2;
 
     /* we need to clear them now, otherwise we end up with dangling pointers to the steps via the TLS context, etc */
-    /* we have no connection to clear, because there was a timeout! */
-    BOOST_CHECK_EQUAL(IncomingTCPConnectionState::clearAllDownstreamConnections(), 0U);
+    /* we have one connection to clear, no proxy protocol */
+    BOOST_CHECK_EQUAL(IncomingTCPConnectionState::clearAllDownstreamConnections(), 1U);
   }
 
   {

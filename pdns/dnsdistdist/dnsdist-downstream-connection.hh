@@ -203,7 +203,7 @@ public:
 
     if (backendIt->second.d_idles.size() >= s_maxIdleConnectionsPerDownstream) {
       auto old = backendIt->second.d_idles.template get<SequencedTag>().back();
-      old->release(false);
+      old->release();
       backendIt->second.d_idles.template get<SequencedTag>().pop_back();
     }
 
@@ -231,7 +231,7 @@ protected:
 
       if (entry->isIdle() && entry->getLastDataReceivedTime() < idleCutOff) {
         /* idle for too long */
-        (*connIt)->release(false);
+        (*connIt)->release();
         connIt = sidx.erase(connIt);
         continue;
       }
@@ -242,7 +242,7 @@ protected:
       }
 
       if (entry->isIdle()) {
-        (*connIt)->release(false);
+        (*connIt)->release();
       }
       connIt = sidx.erase(connIt);
     }

@@ -8,13 +8,6 @@
 
 BOOST_AUTO_TEST_SUITE(syncres_cc8)
 
-static dState getDenial(const cspmap_t& validrrsets, const DNSName& qname, uint16_t qtype, bool referralToUnsigned, bool wantsNoDataProof, const OptLog& log = std::nullopt, bool needWildcardProof = true, unsigned int wildcardLabelsCount = 0)
-{
-  pdns::validation::ValidationContext context;
-  context.d_nsec3IterationsRemainingQuota = std::numeric_limits<decltype(context.d_nsec3IterationsRemainingQuota)>::max();
-  return getDenial(validrrsets, qname, qtype, referralToUnsigned, wantsNoDataProof, context, log, needWildcardProof, wildcardLabelsCount);
-}
-
 BOOST_AUTO_TEST_CASE(test_nsec_denial_nowrap)
 {
   initSR();
@@ -422,8 +415,8 @@ BOOST_AUTO_TEST_CASE(test_nsec3_nxqtype_ds)
 
   sortedRecords_t recordContents;
   vector<shared_ptr<const RRSIGRecordContent>> signatureContents;
-  const unsigned int nbIterations = 10;
-  addNSEC3UnhashedRecordToLW(DNSName("powerdns.com."), DNSName("powerdns.com."), "whatever", {QType::A}, 600, records, nbIterations);
+
+  addNSEC3UnhashedRecordToLW(DNSName("powerdns.com."), DNSName("powerdns.com."), "whatever", {QType::A}, 600, records);
   recordContents.insert(records.at(0).getContent());
   addRRSIG(keys, records, DNSName("powerdns.com."), 300);
   signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
@@ -435,15 +428,10 @@ BOOST_AUTO_TEST_CASE(test_nsec3_nxqtype_ds)
   denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
   records.clear();
 
-  pdns::validation::ValidationContext validationContext;
-  validationContext.d_nsec3IterationsRemainingQuota = 100U;
   /* this NSEC3 is not valid to deny the DS since it is from the child zone */
-  BOOST_CHECK_EQUAL(getDenial(denialMap, DNSName("powerdns.com."), QType::DS, false, true, validationContext), dState::NODENIAL);
-  /* the NSEC3 hash is not computed since we it is from the child zone */
-  BOOST_CHECK_EQUAL(validationContext.d_nsec3IterationsRemainingQuota, 100U);
+  BOOST_CHECK_EQUAL(getDenial(denialMap, DNSName("powerdns.com."), QType::DS, false, true), dState::NODENIAL);
   /* AAAA should be fine, though */
-  BOOST_CHECK_EQUAL(getDenial(denialMap, DNSName("powerdns.com."), QType::AAAA, false, true, validationContext), dState::NXQTYPE);
-  BOOST_CHECK_EQUAL(validationContext.d_nsec3IterationsRemainingQuota, (100U - nbIterations));
+  BOOST_CHECK_EQUAL(getDenial(denialMap, DNSName("powerdns.com."), QType::AAAA, false, true), dState::NXQTYPE);
 }
 
 BOOST_AUTO_TEST_CASE(test_nsec3_nxqtype_cname)
@@ -777,99 +765,6 @@ BOOST_AUTO_TEST_CASE(test_nsec_ent_denial)
   BOOST_CHECK_EQUAL(denialState, dState::NODENIAL);
 }
 
-BOOST_AUTO_TEST_CASE(test_nsec_denial_invalid_signer)
-{
-  initSR();
-
-  testkeysset_t keys;
-  generateKeyMaterial(DNSName("powerdns.com."), DNSSECKeeper::ECDSA256, DNSSECKeeper::DIGEST_SHA256, keys);
-  generateKeyMaterial(DNSName("sub.powerdns.com."), DNSSECKeeper::ECDSA256, DNSSECKeeper::DIGEST_SHA256, keys);
-
-  vector<DNSRecord> records;
-
-  sortedRecords_t recordContents;
-  vector<shared_ptr<const RRSIGRecordContent>> signatureContents;
-
-  addNSECRecordToLW(DNSName("sub.powerdns.com."), DNSName("z.powerdns.com."), {QType::SOA, QType::A}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, DNSName("sub.powerdns.com."), 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-  records.clear();
-  addNSECRecordToLW(DNSName(").powerdns.com."), DNSName("+.powerdns.com."), {}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, DNSName("powerdns.com."), 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-  records.clear();
-
-  ContentSigPair pair;
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  cspmap_t denialMap;
-  denialMap[std::pair(DNSName("sub.powerdns.com."), QType::NSEC)] = pair;
-
-  /* this NSEC cannot prove that sub2 does not exist, because it is signed
-     by the child side of sub.powerdns.com but tries to refute the existence
-     of a name in the parent zone */
-  dState denialState = getDenial(denialMap, DNSName("sub2.powerdns.com."), QType::A, false, false, std::nullopt);
-  BOOST_CHECK_EQUAL(denialState, dState::NODENIAL);
-}
-
-BOOST_AUTO_TEST_CASE(test_nsec3_denial_invalid_signer)
-{
-  initSR();
-
-  testkeysset_t keys;
-  generateKeyMaterial(DNSName("example.org."), DNSSECKeeper::ECDSA256, DNSSECKeeper::DIGEST_SHA256, keys);
-  generateKeyMaterial(DNSName("sub.example.org."), DNSSECKeeper::ECDSA256, DNSSECKeeper::DIGEST_SHA256, keys);
-
-  vector<DNSRecord> records;
-
-  sortedRecords_t recordContents;
-  vector<shared_ptr<const RRSIGRecordContent>> signatureContents;
-
-  /* proves that sub2.example.com does not exist */
-  addNSEC3NarrowRecordToLW(DNSName("sub2.example.org"), DNSName("example.org."), {QType::A, QType::TXT, QType::RRSIG, QType::NSEC3}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  /* but is signed by a subzone */
-  addRRSIG(keys, records, DNSName("sub.example.org."), 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  ContentSigPair pair;
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  cspmap_t denialMap;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  /* Add NSEC3 for the closest encloser */
-  recordContents.clear();
-  signatureContents.clear();
-  records.clear();
-  addNSEC3UnhashedRecordToLW(DNSName("example.org."), DNSName("example.org."), "whatever", {QType::A, QType::TXT, QType::RRSIG, QType::NSEC}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, DNSName("example.org."), 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  /* add wildcard, without the type */
-  recordContents.clear();
-  signatureContents.clear();
-  records.clear();
-  addNSEC3UnhashedRecordToLW(DNSName("*.example.org."), DNSName("example.org"), "whatever", {QType::AAAA}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, DNSName("example.org."), 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  dState denialState = getDenial(denialMap, DNSName("sub2.example.org."), QType::A, false, false);
-  BOOST_CHECK_EQUAL(denialState, dState::NODENIAL);
-}
-
 BOOST_AUTO_TEST_CASE(test_nsec3_ancestor_nxqtype_denial)
 {
   initSR();
@@ -980,68 +875,6 @@ BOOST_AUTO_TEST_CASE(test_nsec3_denial_too_many_iterations)
   BOOST_CHECK_EQUAL(denialState, dState::INSECURE);
 }
 
-BOOST_AUTO_TEST_CASE(test_nsec3_many_labels_between_name_and_closest_encloser)
-{
-  initSR();
-
-  testkeysset_t keys;
-  generateKeyMaterial(DNSName("powerdns.com."), DNSSECKeeper::ECDSA256, DNSSECKeeper::DIGEST_SHA256, keys);
-
-  vector<DNSRecord> records;
-
-  sortedRecords_t recordContents;
-  vector<shared_ptr<const RRSIGRecordContent>> signatureContents;
-
-  ContentSigPair pair;
-  cspmap_t denialMap;
-
-  const DNSName requestedName("_ldap._tcp.a.b.c.d.powerdns.com.");
-  const DNSName zone("powerdns.com.");
-  /* Add NSEC3 for the closest encloser */
-  recordContents.clear();
-  signatureContents.clear();
-  records.clear();
-  addNSEC3UnhashedRecordToLW(DNSName("powerdns.com."), zone, "whatever", {QType::A, QType::TXT, QType::RRSIG, QType::NSEC}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, zone, 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  /* Add NSEC3 for the next closer */
-  recordContents.clear();
-  signatureContents.clear();
-  records.clear();
-  addNSEC3NarrowRecordToLW(DNSName("d.powerdns.com."), zone, {QType::A, QType::TXT, QType::RRSIG, QType::NSEC3}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, zone, 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  /* add wildcard denial */
-  recordContents.clear();
-  signatureContents.clear();
-  records.clear();
-  addNSEC3NarrowRecordToLW(DNSName("*.powerdns.com."), zone, {QType::A, QType::TXT, QType::RRSIG, QType::NSEC3}, 600, records);
-  recordContents.insert(records.at(0).getContent());
-  addRRSIG(keys, records, zone, 300);
-  signatureContents.push_back(getRR<RRSIGRecordContent>(records.at(1)));
-
-  pair.records = recordContents;
-  pair.signatures = signatureContents;
-  denialMap[std::pair(records.at(0).d_name, records.at(0).d_type)] = pair;
-
-  g_maxNSEC3sPerRecordToConsider = 10;
-  auto denialState = getDenial(denialMap, requestedName, QType::A, false, true);
-  g_maxNSEC3sPerRecordToConsider = 0;
-  BOOST_CHECK_EQUAL(denialState, dState::NXDOMAIN);
-}
-
 BOOST_AUTO_TEST_CASE(test_nsec3_insecure_delegation_denial)
 {
   initSR();
@@ -1141,7 +974,7 @@ BOOST_AUTO_TEST_CASE(test_nsec3_ent_opt_out)
    * A recently discovered corner case (see RFC Errata ID 3441 [Err3441])
    * shows that not only those delegations remain insecure but also the
    * empty non-terminal space that is derived from those delegations.
-  */
+   */
   /*
     We have a NSEC3 proving that was.here does exist, and a second
     one proving that ent.was.here. does not,

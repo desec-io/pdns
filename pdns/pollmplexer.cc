@@ -122,7 +122,9 @@ void PollFDMultiplexer::getAvailableFDs(std::vector<int>& fds, int timeout)
 
 int PollFDMultiplexer::run(struct timeval* now, int timeout)
 {
-  InRun guard(d_inrun);
+  if (d_inrun) {
+    throw FDMultiplexerException("FDMultiplexer::run() is not reentrant!\n");
+  }
 
   auto pollfds = preparePollFD();
   if (pollfds.empty()) {
@@ -137,6 +139,7 @@ int PollFDMultiplexer::run(struct timeval* now, int timeout)
     throw FDMultiplexerException("poll returned error: " + stringerror());
   }
 
+  d_inrun = true;
   int count = 0;
   for (const auto& pollfd : pollfds) {
     if (pollfd.revents & POLLIN || pollfd.revents & POLLERR || pollfd.revents & POLLHUP) {
@@ -156,6 +159,7 @@ int PollFDMultiplexer::run(struct timeval* now, int timeout)
     }
   }
 
+  d_inrun = false;
   return count;
 }
 

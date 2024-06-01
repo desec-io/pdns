@@ -264,7 +264,7 @@ uint64_t RecursorPacketCache::doDump(int file)
   if (fdupped == -1) {
     return 0;
   }
-  auto filePtr = pdns::UniqueFilePtr(fdopen(fdupped, "w"));
+  auto filePtr = std::unique_ptr<FILE, decltype(&fclose)>(fdopen(fdupped, "w"), fclose);
   if (!filePtr) {
     close(fdupped);
     return 0;

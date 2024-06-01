@@ -124,20 +124,20 @@ Listen Sockets
     ``internalPipeBufferSize`` now defaults to 1048576 on Linux.
 
   .. versionchanged:: 1.8.0
-     ``certFile`` now accepts a :class:`TLSCertificate` object or a list of such objects (see :func:`newTLSCertificate`)
+     ``certFile`` now accepts a TLSCertificate object or a list of such objects (see :func:`newTLSCertificate`)
      ``additionalAddresses``, ``ignoreTLSConfigurationErrors`` and ``keepIncomingHeaders`` options added.
 
   .. versionchanged:: 1.9.0
-     ``enableProxyProtocol``, ``ktls``, ``library``, ``proxyProtocolOutsideTLS``, ``readAhead``, ``tlsAsyncMode`` options added.
+     ``enableProxyProtocol``, ``library``, ``proxyProtocolOutsideTLS`` and ``readAhead`` options added.
 
-  Listen on the specified address and TCP port for incoming DNS over HTTPS connections, presenting the specified X.509 certificate. See :doc:`../advanced/tls-certificates-management` for details about the handling of TLS certificates and keys.
+  Listen on the specified address and TCP port for incoming DNS over HTTPS connections, presenting the specified X.509 certificate.
   If no certificate (or key) files are specified, listen for incoming DNS over HTTP connections instead.
   More information is available in :doc:`../guides/dns-over-https`.
 
   :param str address: The IP Address with an optional port to listen on.
                       The default port is 443.
-  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a :class:`TLSCertificate` object.
-  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains :class:`TLSCertificate` objects.
+  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a TLSCertificate object.
+  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains TLSCertificate objects.
   :param str-or-list urls: The path part of a URL, or a list of paths, to accept queries on. Any query with a path matching exactly one of these will be treated as a DoH query (sub-paths can be accepted by setting the ``exactPathMatching`` to false). The default is /dns-query.
   :param table options: A table with key: value pairs with listen options.
 
@@ -174,8 +174,6 @@ Listen Sockets
   * ``additionalAddresses``: list - List of additional addresses (with port) to listen on. Using this option instead of creating a new frontend for each address avoids the creation of new thread and Frontend objects, reducing the memory usage. The drawback is that there will be a single set of metrics for all addresses.
   * ``ignoreTLSConfigurationErrors=false``: bool - Ignore TLS configuration errors (such as invalid certificate path) and just issue a warning instead of aborting the whole process
   * ``library``: str - Which underlying HTTP2 library should be used, either h2o or nghttp2. Until 1.9.0 only h2o was available, but the use of this library is now deprecated as it is no longer maintained. nghttp2 is the new default since 1.9.0.
-  * ``ktls=false``: bool - Whether to enable the experimental kernel TLS support on Linux, if both the kernel and the OpenSSL library support it. Default is false.
-  * ``tlsAsyncMode=false``: bool - Whether to enable experimental asynchronous TLS I/O operations if the ``nghttp2`` library is used, ``OpenSSL`` is used as the TLS implementation and an asynchronous capable SSL engine (or provider) is loaded. See also :func:`loadTLSEngine` or :func:`loadTLSProvider` to load the engine (or provider).
   * ``readAhead``: bool - When the TLS provider is set to OpenSSL, whether we tell the library to read as many input bytes as possible, which leads to better performance by reducing the number of syscalls. Default is true.
   * ``proxyProtocolOutsideTLS``: bool - When the use of incoming proxy protocol is enabled, whether the payload is prepended after the start of the TLS session (so inside, meaning it is protected by the TLS layer providing encryption and authentication) or not (outside, meaning it is in clear-text). Default is false which means inside. Note that most third-party software like HAproxy expect the proxy protocol payload to be outside, in clear-text.
   * ``enableProxyProtocol=true``: bool - Whether to expect a proxy protocol v2 header in front of incoming queries coming from an address in :func:`setProxyProtocolACL`. Default is ``true``, meaning that queries are expected to have a proxy protocol payload if they come from an address present in the :func:`setProxyProtocolACL` ACL.
@@ -184,13 +182,13 @@ Listen Sockets
 
   .. versionadded:: 1.9.0
 
-  Listen on the specified address and UDP port for incoming DNS over HTTP3 connections, presenting the specified X.509 certificate. See :doc:`../advanced/tls-certificates-management` for details about the handling of TLS certificates and keys.
+  Listen on the specified address and UDP port for incoming DNS over HTTP3 connections, presenting the specified X.509 certificate.
   More information is available in :doc:`../guides/dns-over-http3`.
 
   :param str address: The IP Address with an optional port to listen on.
                       The default port is 443.
-  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a :class:`TLSCertificate` object.
-  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains :class:`TLSCertificate` objects.
+  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a TLSCertificate object.
+  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains TLSCertificate objects.
   :param table options: A table with key: value pairs with listen options.
 
   Options:
@@ -209,13 +207,11 @@ Listen Sockets
   .. versionadded:: 1.9.0
 
   Listen on the specified address and UDP port for incoming DNS over QUIC connections, presenting the specified X.509 certificate.
-  See :doc:`../advanced/tls-certificates-management` for details about the handling of TLS certificates and keys.
-  More information is available at :doc:`../guides/dns-over-quic`.
 
   :param str address: The IP Address with an optional port to listen on.
                       The default port is 853.
-  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a :class:`TLSCertificate` object.
-  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains :class:`TLSCertificate` objects.
+  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a TLSCertificate object.
+  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains TLSCertificate objects.
   :param table options: A table with key: value pairs with listen options.
 
   Options:
@@ -240,18 +236,17 @@ Listen Sockets
   .. versionchanged:: 1.8.0
     ``tlsAsyncMode`` option added.
   .. versionchanged:: 1.8.0
-     ``certFile`` now accepts a :class:`TLSCertificate` object or a list of such objects (see :func:`newTLSCertificate`).
+     ``certFile`` now accepts a TLSCertificate object or a list of such objects (see :func:`newTLSCertificate`).
      ``additionalAddresses``, ``ignoreTLSConfigurationErrors`` and ``ktls`` options added.
   .. versionchanged:: 1.9.0
      ``enableProxyProtocol``, ``readAhead`` and ``proxyProtocolOutsideTLS`` options added.
 
-  Listen on the specified address and TCP port for incoming DNS over TLS connections, presenting the specified X.509 certificate. See :doc:`../advanced/tls-certificates-management` for details about the handling of TLS certificates and keys.
-  More information is available at :doc:`../guides/dns-over-tls`.
+  Listen on the specified address and TCP port for incoming DNS over TLS connections, presenting the specified X.509 certificate.
 
   :param str address: The IP Address with an optional port to listen on.
                       The default port is 853.
-  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a :class:`TLSCertificate` object.
-  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains :class:`TLSCertificate` objects.
+  :param str certFile(s): The path to a X.509 certificate file in PEM format, a list of paths to such files, or a TLSCertificate object.
+  :param str keyFile(s): The path to the private key file corresponding to the certificate, or a list of paths to such files, whose order should match the certFile(s) ones. Ignored if ``certFile`` contains TLSCertificate objects.
   :param table options: A table with key: value pairs with listen options.
 
   Options:
@@ -638,9 +633,6 @@ Servers
   .. versionchanged:: 1.9.0
     Added ``MACAddr``, ``proxyProtocolAdvertiseTLS`` and ``xskSockets`` to server_table.
 
-  .. versionchanged:: 2.0.0
-    Removed ``addXPF`` from server_table.
-
   :param str server_string: A simple IP:PORT string.
   :param table server_table: A table with at least an ``address`` key
 
@@ -691,6 +683,7 @@ Servers
                                                              - address, e.g. ``""192.0.2.2""``
                                                              - interface name, e.g. ``""eth0""``
                                                              - address@interface, e.g. ``""192.0.2.2@eth0""`` "
+     ``addXPF``                              ``number``            "Add the client's IP address and port to the query, along with the original destination address and port, using the experimental XPF record from `draft-bellis-dnsop-xpf <https://datatracker.ietf.org/doc/draft-bellis-dnsop-xpf/>`_ and the specified option code. Default is disabled (0). This is a deprecated feature that will be removed in the near future."
     ``sockets``                              ``number``            "Number of UDP sockets (and thus source ports) used toward the backend server, defaults to a single one. Note that for backends which are multithreaded, this setting will have an effect on the number of cores that will be used to process traffic from dnsdist. For example you may want to set 'sockets' to a number somewhat higher than the number of worker threads configured in the backend, particularly if the Linux kernel is being used to distribute traffic to multiple threads listening on the same socket (via `reuseport`). See also :func:`setRandomizedOutgoingSockets`."
     ``disableZeroScope``                     ``bool``              "Disable the EDNS Client Subnet 'zero scope' feature, which does a cache lookup for an answer valid for all subnets (ECS scope of 0) before adding ECS information to the query and doing the regular lookup. This requires the ``parseECS`` option of the corresponding cache to be set to true"
     ``rise``                                 ``number``               "Require ``number`` consecutive successful checks before declaring the backend up, default: 1"
@@ -806,9 +799,7 @@ A server object returned by :func:`getServer` can be manipulated with these func
 
   .. method:: Server:isUp() -> bool
 
-    Returns the up status of the server.
-    Result is based on the administrative status of the server (as set by either :meth:`Server:setDown` or :meth:`Server:setUp`).
-    If no administrative status is set (see :meth:`Server:setAuto`), result is based on :attr:`Server.upStatus`
+    Returns the up status of the server
 
     :returns: true when the server is up, false otherwise
 
@@ -827,7 +818,7 @@ A server object returned by :func:`getServer` can be manipulated with these func
 
   .. method:: Server:setDown()
 
-    Administratively set the server in a ``DOWN`` state.
+    Set the server in a ``DOWN`` state.
     The server will not receive queries and the health checks are disabled.
 
   .. method:: Server:setLazyAuto([status])
@@ -848,7 +839,7 @@ A server object returned by :func:`getServer` can be manipulated with these func
 
   .. method:: Server:setUp()
 
-    Administratively set the server in an ``UP`` state.
+    Set the server in an ``UP`` state.
     This server will still receive queries and health checks are disabled
 
   Apart from the functions, a :class:`Server` object has these attributes:
@@ -859,7 +850,7 @@ A server object returned by :func:`getServer` can be manipulated with these func
 
   .. attribute:: Server.upStatus
 
-    Whether or not this server is ``up`` (true) or ``down`` (false) based on the last known state of health-checks.
+    Whether or not this server is up or down
 
   .. attribute:: Server.order
 
@@ -1126,37 +1117,13 @@ Status, Statistics and More
 
   .. versionadded:: 1.4.0
 
-  Return the :class:`DOHFrontend` object for the DNS over HTTPS bind of index ``idx``.
+  Return the DOHFrontend object for the DNS over HTTPS bind of index ``idx``.
 
 .. function:: getDOHFrontendCount()
 
   .. versionadded:: 1.5.0
 
-  Return the number of :class:`DOHFrontend` binds.
-
-.. function:: getDOH3Frontend(idx)
-
-  .. versionadded:: 1.9.0
-
-  Return the :class:`DOH3Frontend` object for the DNS over HTTP3 bind of index ``idx``.
-
-.. function:: getDOH3FrontendCount()
-
-  .. versionadded:: 1.9.0
-
-  Return the number of :class:`DOH3Frontend` binds.
-
-.. function:: getDOQFrontend(idx)
-
-  .. versionadded:: 1.9.0
-
-  Return the :class:`DOQFrontend` object for the DNS over QUIC bind of index ``idx``.
-
-.. function:: getDOQFrontendCount()
-
-  .. versionadded:: 1.9.0
-
-  Return the number of :class:`DOQFrontend` binds.
+  Return the number of DOHFrontend binds.
 
 .. function:: getListOfAddressesOfNetworkInterface(itf)
 
@@ -1673,12 +1640,9 @@ faster than the existing rules.
 
   Represents a group of dynamic block rules.
 
-  .. method:: DynBlockRulesGroup:setCacheMissRatio(ratio, seconds, reason, blockingTime, minimumNumberOfResponses, minimumGlobalCacheHitRatio, [, action [, warningRate, [options]]])
+  .. method:: DynBlockRulesGroup:setCacheMissRatio(ratio, seconds, reason, blockingTime, minimumNumberOfResponses, minimumGlobalCacheHitRatio, [, action [, warningRate]])
 
     .. versionadded:: 1.9.0
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
 
     Adds a rate-limiting rule for the ratio of cache-misses responses over the total number of responses for a given client.
     A minimum global cache-hit ratio has to specified to prevent false-positive when the cache is empty.
@@ -1691,12 +1655,6 @@ faster than the existing rules.
     :param float minimumGlobalCacheHitRatio: The minimum global cache-hit ratio (over all pools, so ``cache-hits / (cache-hits + cache-misses)``) for that rule to be applied.
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param float warningRatio: If set to a non-zero value, the ratio above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
-
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string.
 
   .. method:: DynBlockRulesGroup:setMasks(v4, v6, port)
 
@@ -1713,10 +1671,7 @@ faster than the existing rules.
     :param int v6: Number of bits to keep for IPv6 addresses. Default is 128
     :param int port: Number of bits of port to consider over IPv4. Default is 0 meaning that the port is not taken into account
 
-  .. method:: DynBlockRulesGroup:setQueryRate(rate, seconds, reason, blockingTime [, action [, warningRate, [options]]])
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
+  .. method:: DynBlockRulesGroup:setQueryRate(rate, seconds, reason, blockingTime [, action [, warningRate]])
 
     Adds a query rate-limiting rule, equivalent to:
     ```
@@ -1729,12 +1684,6 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param int warningRate: If set to a non-zero value, the rate above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
-
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
 
   .. method:: DynBlockRulesGroup:setNewBlockInsertedHook(hook)
 
@@ -1749,13 +1698,7 @@ faster than the existing rules.
     * the duration of the block in seconds
     * whether this is a warning block (true) or not (false)
 
-  .. method:: DynBlockRulesGroup:setRCodeRate(rcode, rate, seconds, reason, blockingTime [, action [, warningRate, [options]]])
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
-
-    .. note::
-      Cache hits are inserted into the in-memory ring buffers since 1.8.0, so they are now considered when computing the rcode rate.
+  .. method:: DynBlockRulesGroup:setRCodeRate(rcode, rate, seconds, reason, blockingTime [, action [, warningRate]])
 
     Adds a rate-limiting rule for responses of code ``rcode``, equivalent to:
     ```
@@ -1769,22 +1712,10 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param int warningRate: If set to a non-zero value, the rate above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
 
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
-
-  .. method:: DynBlockRulesGroup:setRCodeRatio(rcode, ratio, seconds, reason, blockingTime, minimumNumberOfResponses [, action [, warningRate, [options]]])
+  .. method:: DynBlockRulesGroup:setRCodeRatio(rcode, ratio, seconds, reason, blockingTime, minimumNumberOfResponses [, action [, warningRate]])
 
     .. versionadded:: 1.5.0
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
-
-    .. note::
-      Cache hits are inserted into the in-memory ring buffers since 1.8.0, so they are now considered when computing the rcode ratio.
 
     Adds a rate-limiting rule for the ratio of responses of code ``rcode`` over the total number of responses for a given client.
 
@@ -1796,17 +1727,8 @@ faster than the existing rules.
     :param int minimumNumberOfResponses: How many total responses is required for this rule to apply
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param float warningRatio: If set to a non-zero value, the ratio above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
 
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
-
-  .. method:: DynBlockRulesGroup:setQTypeRate(qtype, rate, seconds, reason, blockingTime [, action [, warningRate, [options]]])
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
+  .. method:: DynBlockRulesGroup:setQTypeRate(qtype, rate, seconds, reason, blockingTime [, action [, warningRate]])
 
     Adds a rate-limiting rule for queries of type ``qtype``, equivalent to:
     ```
@@ -1820,20 +1742,8 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param int warningRate: If set to a non-zero value, the rate above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
 
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
-
-  .. method:: DynBlockRulesGroup:setResponseByteRate(rate, seconds, reason, blockingTime [, action [, warningRate, [options]]])
-
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
-
-    .. note::
-      Cache hits are inserted into the in-memory ring buffers since 1.8.0, so they are now considered when computing the bandwidth rate.
+  .. method:: DynBlockRulesGroup:setResponseByteRate(rate, seconds, reason, blockingTime [, action [, warningRate]])
 
     Adds a bandwidth rate-limiting rule for responses, equivalent to:
     ```
@@ -1846,14 +1756,8 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param int warningRate: If set to a non-zero value, the rate above which a warning message will be issued and a no-op block inserted
-    :param table options: A table with key: value pairs, see below for supported values.
 
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
-
-  .. method:: DynBlockRulesGroup:setSuffixMatchRule(seconds, reason, blockingTime, action, visitor, [options])
+  .. method:: DynBlockRulesGroup:setSuffixMatchRule(seconds, reason, blockingTime, action , visitor)
 
     .. versionadded:: 1.4.0
 
@@ -1863,12 +1767,9 @@ faster than the existing rules.
     .. versionchanged:: 1.9.0
       This visitor function can now optionally return an additional integer which will be set as the ``action`` for the dynamic block.
 
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
-
     Set a Lua visitor function that will be called for each label of every domain seen in queries and responses. The function receives a :class:`StatNode` object representing the stats of the parent, a :class:`StatNodeStats` one with the stats of the current label and a second :class:`StatNodeStats` with the stats of the current node plus all its children.
     Note that this function will not be called if a FFI version has been set using :meth:`DynBlockRulesGroup:setSuffixMatchRuleFFI`
-    If the function returns ``true``, the current suffix will be added to the block list, meaning that the exact name and all its sub-domains will be blocked according to the `seconds`, `reason`, `blockingTime` and `action` parameters. Since 1.7.0, the function can return an additional string, in addition to the boolean, which will be set as the ``reason`` for the dynamic block.
+    If the function returns true, the current label will be blocked according to the `seconds`, `reason`, `blockingTime` and `action` parameters. Since 1.7.0, the function can return an additional string, in addition to the boolean, which will be set as the ``reason`` for the dynamic block.
     Selected domains can be excluded from this processing using the :meth:`DynBlockRulesGroup:excludeDomains` method.
 
     This replaces the existing :func:`addDynBlockSMT` function.
@@ -1878,22 +1779,13 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param function visitor: The Lua function to call.
-    :param table options: A table with key: value pairs, see below for supported values.
 
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
-
-  .. method:: DynBlockRulesGroup:setSuffixMatchRuleFFI(seconds, reason, blockingTime, action , visitor, [options])
+  .. method:: DynBlockRulesGroup:setSuffixMatchRuleFFI(seconds, reason, blockingTime, action , visitor)
 
     .. versionadded:: 1.4.0
 
-    .. versionadded:: 2.0.0
-      ``options`` optional parameter added
-
     Set a Lua FFI visitor function that will be called for each label of every domain seen in queries and responses. The function receives a `dnsdist_ffi_stat_node_t` object containing the stats of the parent, a second one with the stats of the current label and one with the stats of the current node plus all its children.
-    If the function returns ``true``, the current suffix will be added to the block list, meaning that the exact name and all its sub-domains will be blocked according to the `seconds`, `reason`, `blockingTime` and `action` parameters.
+    If the function returns true, the current label will be blocked according to the `seconds`, `reason`, `blockingTime` and `action` parameters.
     Selected domains can be excluded from this processing using the :meth:`DynBlockRulesGroup:excludeDomains` method.
 
     :param int seconds: Number of seconds the rate has been exceeded
@@ -1901,12 +1793,6 @@ faster than the existing rules.
     :param int blockingTime: The number of seconds this block to expire
     :param int action: The action to take when the dynamic block matches, see :ref:`DNSAction <DNSAction>`. (default to the one set with :func:`setDynBlocksAction`)
     :param function visitor: The Lua FFI function to call.
-    :param table options: A table with key: value pairs, see below for supported values.
-
-    Options:
-
-    * ``tagKey``: str - If ``action`` is set to ``DNSAction.SetTag``, the name of the tag that will be set
-    * ``tagValue``: str - If ``action`` is set to ``DNSAction.SetTag``, the value of the tag that will be set. Default is an empty string
 
   .. method:: DynBlockRulesGroup:apply()
 
@@ -2096,23 +1982,6 @@ These values can be set at configuration time via:
 Other functions
 ---------------
 
-.. function:: addMaintenanceCallback(callback)
-
-  .. versionadded:: 1.10.0
-
-  Register a Lua function to be called as part of the ``maintenance`` hook, which is executed roughly every second.
-  The function should not block for a long period of time, as it would otherwise delay the execution of the other functions registered for this hook, as well as the execution of the :func:`maintenance` function.
-
-  :param function callback: The function to be called. It takes no parameter and returns no value.
-
-  .. code-block:: lua
-
-    function myCallback(hostname, ips)
-      print('called')
-    end
-    addMaintenanceCallback(myCallback)
-
-
 .. function:: getAddressInfo(hostname, callback)
 
   .. versionadded:: 1.9.0
@@ -2157,7 +2026,6 @@ Other functions
 
   If this function exists, it is called every second to do regular tasks.
   This can be used for e.g. :doc:`Dynamic Blocks <../guides/dynblocks>`.
-  See also :func:`addMaintenanceCallback`.
 
 .. function:: threadmessage(cmd, dict)
 
@@ -2245,7 +2113,7 @@ Other functions
 
   Load the OpenSSL engine named ``engineName``, setting the engine default string to ``defaultString`` if supplied. Engines can be used to accelerate cryptographic operations, like for example Intel QAT.
   At the moment up to a maximum of 32 loaded engines are supported, and that support is experimental.
-  Some engines might actually degrade performance unless the TLS asynchronous mode of OpenSSL is enabled. To enable it see the ``tlsAsyncMode`` parameter on :func:`addTLSLocal` and :func:`addDOHLocal`.
+  Some engines might actually degrade performance unless the TLS asynchronous mode of OpenSSL is enabled. To enable it see the ``tlsAsyncMode`` parameter on :func:`addTLSLocal`.
 
   :param string engineName: The name of the engine to load.
   :param string defaultString: The default string to pass to the engine. The exact value depends on the engine but represents the algorithms to register with the engine, as a list of  comma-separated keywords. For example "RSA,EC,DSA,DH,PKEY,PKEY_CRYPTO,PKEY_ASN1".
@@ -2257,7 +2125,7 @@ Other functions
   Load the OpenSSL provider named ``providerName``. Providers can be used to accelerate cryptographic operations, like for example Intel QAT.
   At the moment up to a maximum of 32 loaded providers are supported, and that support is experimental.
   Note that :func:`loadTLSProvider` is only available when building against OpenSSL version >= 3.0 and with the `--enable-tls-provider` configure flag on. In other cases, :func:`loadTLSEngine` should be used instead.
-  Some providers might actually degrade performance unless the TLS asynchronous mode of OpenSSL is enabled. To enable it see the ``tlsAsyncMode`` parameter on :func:`addTLSLocal` and :func:`addDOHLocal`.
+  Some providers might actually degrade performance unless the TLS asynchronous mode of OpenSSL is enabled. To enable it see the ``tlsAsyncMode`` parameter on :func:`addTLSLocal`.
 
   :param string providerName: The name of the provider to load.
 
@@ -2265,22 +2133,22 @@ Other functions
 
   .. versionadded:: 1.8.0
 
-  Creates a :class:`TLSCertificate` object suited to be used with functions like :func:`addDOHLocal`, :func:`addDOH3Local`, :func:`addDOQLocal` and :func:`addTLSLocal` for TLS certificate configuration.
+  Creates a TLSCertificate object suited to be used with functions like :func:`addDOHLocal` and :func:`addTLSLocal` for TLS certificate configuration.
 
-  ``PKCS12`` files are only supported by the ``openssl`` provider, password-protected or not.
+  PKCS12 files are only supported by the ``openssl`` provider, password-protected or not.
 
-  :param string pathToCert: Path to a file containing the certificate or a ``PKCS12`` file containing both a certificate and a key.
+  :param string pathToCert: Path to a file containing the certificate or a PKCS12 file containing both a certificate and a key.
   :param table options: A table with key: value pairs with additional options.
 
   Options:
 
   * ``key="path/to/key"``: string - Path to a file containing the key corresponding to the certificate.
-  * ``password="pass"``: string - Password protecting the ``PKCS12`` file if appropriate.
+  * ``password="pass"``: string - Password protecting the PKCS12 file if appropriate.
 
   .. code-block:: lua
 
     newTLSCertificate("path/to/pub.crt", {key="path/to/private.pem"})
-    newTLSCertificate("path/to/domain.p12", {password="passphrase"}) -- use a password protected ``PKCS12`` file
+    newTLSCertificate("path/to/domain.p12", {password="passphrase"}) -- use a password protected PKCS12 file
 
 DOHFrontend
 ~~~~~~~~~~~
@@ -2340,32 +2208,6 @@ DOHFrontend
   :param int status: The HTTP code to answer with.
   :param str content: The content of the HTTP response, or a URL if the status is a redirection (3xx).
   :param table of headers: The custom headers to set for the HTTP response, if any. The default is to use the value of the ``customResponseHeaders`` parameter passed to :func:`addDOHLocal`.
-
-DOH3Frontend
-~~~~~~~~~~~~
-
-.. class:: DOH3Frontend
-
-  .. versionadded:: 1.9.0
-
-  This object represents an address and port dnsdist is listening on for DNS over HTTP3 queries.
-
-  .. method:: DOH3Frontend:reloadCertificates()
-
-     Reload the current TLS certificate and key pairs.
-
-DOQFrontend
-~~~~~~~~~~~
-
-.. class:: DOQFrontend
-
-  .. versionadded:: 1.9.0
-
-  This object represents an address and port dnsdist is listening on for DNS over QUIC queries.
-
-  .. method:: DOQFrontend:reloadCertificates()
-
-     Reload the current TLS certificate and key pairs.
 
 LuaRingEntry
 ~~~~~~~~~~~~
@@ -2438,13 +2280,6 @@ timespec
   .. attribute:: timespec.tv_nsec
 
     Number of remaining nanoseconds elapsed since Unix epoch after subtracting the seconds from the `tv_sec` field.
-
-TLSCertificate
-~~~~~~~~~~~~~~
-
-.. class:: TLSCertificate
-
-  This object represents a TLS certificate. It can be created with :func:`newTLSCertificate` and used with :func:`addDOHLocal`, :func:`addDOH3Local`, :func:`addDOQLocal` and :func:`addTLSLocal` for TLS certificate configuration. It is mostly useful to deal with password-protected ``PKCS12`` certificates.
 
 TLSContext
 ~~~~~~~~~~

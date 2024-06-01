@@ -17,7 +17,7 @@ class BadRPZServer(object):
         self._targetSerial = 1
         self._serverPort = port
         listener = threading.Thread(name='RPZ Listener', target=self._listener, args=[])
-        listener.daemon = True
+        listener.setDaemon(True)
         listener.start()
 
     def getCurrentSerial(self):
@@ -117,7 +117,7 @@ class BadRPZServer(object):
                 thread = threading.Thread(name='RPZ Connection Handler',
                                       target=self._connectionHandler,
                                       args=[conn])
-                thread.daemon = True
+                thread.setDaemon(True)
                 thread.start()
 
             except socket.error as e:

@@ -66,12 +66,9 @@ public:
   }
 
   // Return the zone's apex RRSIGs
-  [[nodiscard]] const std::vector<shared_ptr<const RRSIGRecordContent>>& getRRSIGs(QType requestedType)
+  [[nodiscard]] const std::vector<shared_ptr<const RRSIGRecordContent>>& getRRSIGs() const
   {
-    if (d_rrsigs.count(requestedType) == 0) {
-      d_rrsigs[requestedType] = {};
-    }
-    return d_rrsigs[requestedType];
+    return d_rrsigs;
   }
 
   // Return the zone's apex ZONEMDs
@@ -143,7 +140,7 @@ private:
 
   std::shared_ptr<const SOARecordContent> d_soaRecordContent;
   std::set<shared_ptr<const DNSKEYRecordContent>> d_dnskeys;
-  std::map<QType, std::vector<shared_ptr<const RRSIGRecordContent>>> d_rrsigs;
+  std::vector<shared_ptr<const RRSIGRecordContent>> d_rrsigs;
   std::vector<shared_ptr<const NSEC3PARAMRecordContent>> d_nsec3params;
   ContentSigPair d_nsecs;
   map<DNSName, ContentSigPair> d_nsec3s;

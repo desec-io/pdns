@@ -379,7 +379,7 @@ class PipeLoader
 public:
   PipeLoader()
   {
-    BackendMakers().report(std::make_unique<PipeFactory>());
+    BackendMakers().report(new PipeFactory);
     g_log << Logger::Info << kBackendId << " This is the pipe backend version " VERSION
 #ifndef REPRODUCIBLE
           << " (" __DATE__ " " __TIME__ ")"

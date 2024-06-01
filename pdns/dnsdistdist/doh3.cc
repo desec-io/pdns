@@ -54,8 +54,8 @@ using h3_headers_t = std::map<std::string, std::string>;
 class H3Connection
 {
 public:
-  H3Connection(const ComboAddress& peer, const ComboAddress& localAddr, QuicheConfig config, QuicheConnection&& conn) :
-    d_peer(peer), d_localAddr(localAddr), d_conn(std::move(conn)), d_config(std::move(config))
+  H3Connection(const ComboAddress& peer, QuicheConnection&& conn) :
+    d_peer(peer), d_conn(std::move(conn))
   {
   }
   H3Connection(const H3Connection&) = delete;
@@ -65,9 +65,7 @@ public:
   ~H3Connection() = default;
 
   ComboAddress d_peer;
-  ComboAddress d_localAddr;
   QuicheConnection d_conn;
-  QuicheConfig d_config;
   QuicheHTTP3Connection d_http3{nullptr, quiche_h3_conn_free};
   // buffer request headers by streamID
   std::unordered_map<uint64_t, h3_headers_t> d_headersBuffers;
@@ -142,8 +140,8 @@ public:
 
     if (!response.isAsync()) {
 
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::ResponseRules).getLocal();
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localCacheInsertedRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::CacheInsertedResponseRules).getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localRespRuleActions = g_respruleactions.getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localCacheInsertedRespRuleActions = g_cacheInsertedRespRuleActions.getLocal();
 
       dnsResponse.ids.doh3u = std::move(unit);
 
@@ -381,20 +379,14 @@ static void handleResponse(DOH3Frontend& frontend, H3Connection& conn, const uin
 void DOH3Frontend::setup()
 {
   auto config = QuicheConfig(quiche_config_new(QUICHE_PROTOCOL_VERSION), quiche_config_free);
+
   d_quicheParams.d_alpn = std::string(DOH3_ALPN.begin(), DOH3_ALPN.end());
   configureQuiche(config, d_quicheParams, true);
 
+  // quiche_h3_config_new
   auto http3config = QuicheHTTP3Config(quiche_h3_config_new(), quiche_h3_config_free);
 
   d_server_config = std::make_unique<DOH3ServerConfig>(std::move(config), std::move(http3config), d_internalPipeBufferSize);
-}
-
-void DOH3Frontend::reloadCertificates()
-{
-  auto config = QuicheConfig(quiche_config_new(QUICHE_PROTOCOL_VERSION), quiche_config_free);
-  d_quicheParams.d_alpn = std::string(DOH3_ALPN.begin(), DOH3_ALPN.end());
-  configureQuiche(config, d_quicheParams, true);
-  std::atomic_store_explicit(&d_server_config->config, std::move(config), std::memory_order_release);
 }
 
 static std::optional<std::reference_wrapper<H3Connection>> getConnection(DOH3ServerConfig::ConnectionsMap& connMap, const PacketBuffer& connID)
@@ -422,25 +414,24 @@ static void sendBackDOH3Unit(DOH3UnitUniquePtr&& unit, const char* description)
   }
 }
 
-static std::optional<std::reference_wrapper<H3Connection>> createConnection(DOH3ServerConfig& config, const PacketBuffer& serverSideID, const PacketBuffer& originalDestinationID, const ComboAddress& localAddr, const ComboAddress& peer)
+static std::optional<std::reference_wrapper<H3Connection>> createConnection(DOH3ServerConfig& config, const PacketBuffer& serverSideID, const PacketBuffer& originalDestinationID, const ComboAddress& local, const ComboAddress& peer)
 {
-  auto quicheConfig = std::atomic_load_explicit(&config.config, std::memory_order_acquire);
   auto quicheConn = QuicheConnection(quiche_accept(serverSideID.data(), serverSideID.size(),
                                                    originalDestinationID.data(), originalDestinationID.size(),
                                                    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-                                                   reinterpret_cast<const struct sockaddr*>(&localAddr),
-                                                   localAddr.getSocklen(),
+                                                   reinterpret_cast<const struct sockaddr*>(&local),
+                                                   local.getSocklen(),
                                                    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
                                                    reinterpret_cast<const struct sockaddr*>(&peer),
                                                    peer.getSocklen(),
-                                                   quicheConfig.get()),
+                                                   config.config.get()),
                                      quiche_conn_free);
 
   if (config.df && !config.df->d_quicheParams.d_keyLogFile.empty()) {
     quiche_conn_set_keylog_path(quicheConn.get(), config.df->d_quicheParams.d_keyLogFile.c_str());
   }
 
-  auto conn = H3Connection(peer, localAddr, std::move(quicheConfig), std::move(quicheConn));
+  auto conn = H3Connection(peer, std::move(quicheConn));
   auto pair = config.d_connections.emplace(serverSideID, std::move(conn));
   return pair.first->second;
 }
@@ -744,7 +735,7 @@ static void processH3HeaderEvent(ClientState& clientState, DOH3Frontend& fronten
       return;
     }
     DEBUGLOG("Dispatching GET query");
-    doh3_dispatch_query(*(frontend.d_server_config), std::move(*payload), conn.d_localAddr, client, serverConnID, streamID);
+    doh3_dispatch_query(*(frontend.d_server_config), std::move(*payload), clientState.local, client, serverConnID, streamID);
     conn.d_streamBuffers.erase(streamID);
     conn.d_headersBuffers.erase(streamID);
     return;
@@ -809,7 +800,7 @@ static void processH3DataEvent(ClientState& clientState, DOH3Frontend& frontend,
   }
 
   DEBUGLOG("Dispatching POST query");
-  doh3_dispatch_query(*(frontend.d_server_config), std::move(streamBuffer), conn.d_localAddr, client, serverConnID, streamID);
+  doh3_dispatch_query(*(frontend.d_server_config), std::move(streamBuffer), clientState.local, client, serverConnID, streamID);
   conn.d_headersBuffers.erase(streamID);
   conn.d_streamBuffers.erase(streamID);
 }
@@ -857,21 +848,10 @@ static void handleSocketReadable(DOH3Frontend& frontend, ClientState& clientStat
   PacketBuffer tokenBuf;
   while (true) {
     ComboAddress client;
-    ComboAddress localAddr;
-    client.sin4.sin_family = clientState.local.sin4.sin_family;
-    localAddr.sin4.sin_family = clientState.local.sin4.sin_family;
     buffer.resize(4096);
-    if (!dnsdist::doq::recvAsync(sock, buffer, client, localAddr)) {
+    if (!sock.recvFromAsync(buffer, client) || buffer.empty()) {
       return;
     }
-    if (localAddr.sin4.sin_family == 0) {
-      localAddr = clientState.local;
-    }
-    else {
-      /* we don't get the port, only the address */
-      localAddr.sin4.sin_port = clientState.local.sin4.sin_port;
-    }
-
     DEBUGLOG("Received DoH3 datagram of size " << buffer.size() << " from " << client.toStringWithPort());
 
     uint32_t version{0};
@@ -900,22 +880,17 @@ static void handleSocketReadable(DOH3Frontend& frontend, ClientState& clientStat
 
     if (!conn) {
       DEBUGLOG("Connection not found");
-      if (type != static_cast<uint8_t>(DOQ_Packet_Types::QUIC_PACKET_TYPE_INITIAL)) {
-        DEBUGLOG("Packet is not initial");
-        continue;
-      }
-
       if (!quiche_version_is_supported(version)) {
         DEBUGLOG("Unsupported version");
         ++frontend.d_doh3UnsupportedVersionErrors;
-        handleVersionNegociation(sock, clientConnID, serverConnID, client, localAddr, buffer);
+        handleVersionNegociation(sock, clientConnID, serverConnID, client, buffer);
         continue;
       }
 
       if (token_len == 0) {
         /* stateless retry */
         DEBUGLOG("No token received");
-        handleStatelessRetry(sock, clientConnID, serverConnID, client, localAddr, version, buffer);
+        handleStatelessRetry(sock, clientConnID, serverConnID, client, version, buffer);
         continue;
       }
 
@@ -928,7 +903,7 @@ static void handleSocketReadable(DOH3Frontend& frontend, ClientState& clientStat
       }
 
       DEBUGLOG("Creating a new connection");
-      conn = createConnection(*frontend.d_server_config, serverConnID, *originalDestinationID, localAddr, client);
+      conn = createConnection(*frontend.d_server_config, serverConnID, *originalDestinationID, clientState.local, client);
       if (!conn) {
         continue;
       }
@@ -939,8 +914,8 @@ static void handleSocketReadable(DOH3Frontend& frontend, ClientState& clientStat
       reinterpret_cast<struct sockaddr*>(&client),
       client.getSocklen(),
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      reinterpret_cast<struct sockaddr*>(&localAddr),
-      localAddr.getSocklen(),
+      reinterpret_cast<struct sockaddr*>(&clientState.local),
+      clientState.local.getSocklen(),
     };
 
     auto done = quiche_conn_recv(conn->get().d_conn.get(), buffer.data(), buffer.size(), &recv_info);
@@ -962,7 +937,7 @@ static void handleSocketReadable(DOH3Frontend& frontend, ClientState& clientStat
 
       processH3Events(clientState, frontend, conn->get(), client, serverConnID, buffer);
 
-      flushEgress(sock, conn->get().d_conn, client, localAddr, buffer);
+      flushEgress(sock, conn->get().d_conn, client, buffer);
     }
     else {
       DEBUGLOG("Connection not established");
@@ -1007,7 +982,7 @@ void doh3Thread(ClientState* clientState)
         for (auto conn = frontend->d_server_config->d_connections.begin(); conn != frontend->d_server_config->d_connections.end();) {
           quiche_conn_on_timeout(conn->second.d_conn.get());
 
-          flushEgress(sock, conn->second.d_conn, conn->second.d_peer, conn->second.d_localAddr, buffer);
+          flushEgress(sock, conn->second.d_conn, conn->second.d_peer, buffer);
 
           if (quiche_conn_is_closed(conn->second.d_conn.get())) {
 #ifdef DEBUGLOG_ENABLED

@@ -33,15 +33,11 @@
 #include <fstrm/tcp_writer.h>
 #endif
 
-class FrameStreamLogger : public RemoteLoggerInterface
+class FrameStreamLogger : public RemoteLoggerInterface, boost::noncopyable
 {
 public:
-  FrameStreamLogger(int family, std::string address, bool connect, const std::unordered_map<string, unsigned>& options = std::unordered_map<string, unsigned>());
-  FrameStreamLogger(const FrameStreamLogger&) = delete;
-  FrameStreamLogger(FrameStreamLogger&&) = delete;
-  FrameStreamLogger& operator=(const FrameStreamLogger&) = delete;
-  FrameStreamLogger& operator=(FrameStreamLogger&&) = delete;
-  ~FrameStreamLogger() override;
+  FrameStreamLogger(int family, const std::string& address, bool connect, const std::unordered_map<string, unsigned>& options = std::unordered_map<string, unsigned>());
+  ~FrameStreamLogger();
   [[nodiscard]] RemoteLoggerInterface::Result queueData(const std::string& data) override;
 
   [[nodiscard]] std::string address() const override
@@ -87,11 +83,7 @@ private:
 };
 
 #else
-class FrameStreamLogger : public RemoteLoggerInterface
+class FrameStreamLogger : public RemoteLoggerInterface, boost::noncopyable
 {
-  FrameStreamLogger(const FrameStreamLogger&) = delete;
-  FrameStreamLogger(FrameStreamLogger&&) = delete;
-  FrameStreamLogger& operator=(const FrameStreamLogger&) = delete;
-  FrameStreamLogger& operator=(FrameStreamLogger&&) = delete;
 };
 #endif /* HAVE_FSTRM */

@@ -53,15 +53,15 @@ using namespace boost::assign;
 std::unique_ptr<DNSCryptoKeyEngine> DNSCryptoKeyEngine::makeFromISCFile(DNSKEYRecordContent& drc, const char* fname)
 {
   string sline, isc;
-  auto filePtr = pdns::UniqueFilePtr(fopen(fname, "r"));
-  if(!filePtr) {
+  auto fp = std::unique_ptr<FILE, int(*)(FILE*)>(fopen(fname, "r"), fclose);
+  if(!fp) {
     throw runtime_error("Unable to read file '"+string(fname)+"' for generating DNS Private Key");
   }
 
-  while(stringfgets(filePtr.get(), sline)) {
+  while(stringfgets(fp.get(), sline)) {
     isc += sline;
   }
-  filePtr.reset();
+  fp.reset();
 
   auto dke = makeFromISCString(drc, isc);
   auto checkKeyErrors = std::vector<std::string>{};
@@ -429,22 +429,32 @@ void DNSCryptoKeyEngine::testMakers(unsigned int algo, maker_t* creator, maker_t
   auto dckeVerify = verifier(algo);
 
   cout<<"Testing algorithm "<<algo<<"("<<DNSSECKeeper::algorithm2name(algo)<<"): '"<<dckeCreate->getName()<<"' ->'"<<dckeSign->getName()<<"' -> '"<<dckeVerify->getName()<<"' ";
-  unsigned int bits;
+  unsigned int key_param;
   if(algo <= 10)
-    bits=2048;
+    key_param = 2048;
   else if(algo == DNSSECKeeper::ECCGOST || algo == DNSSECKeeper::ECDSA256 || algo == DNSSECKeeper::ED25519)
-    bits = 256;
+    key_param = 256;
   else if(algo == DNSSECKeeper::ECDSA384)
-    bits = 384;
+    key_param = 384;
   else if(algo == DNSSECKeeper::ED448)
-    bits = 456;
+    key_param = 456;
+  else if(algo == DNSSECKeeper::FALCON512)
+    key_param = 10248;
+  else if(algo == DNSSECKeeper::DILITHIUM2)
+    key_param = 20224;
+  else if(algo == DNSSECKeeper::SPHINCSSHA256128S)
+    key_param = 512;
+  else if(algo == DNSSECKeeper::XMSS)
+    key_param = 0x01; /* XMSS_SHA256_H10 */
+  else if(algo == DNSSECKeeper::XMSSMT)
+    key_param = 0x01; /* XMSSMT_SHA256_H20/2 */
   else
-    throw runtime_error("Can't guess key size for algorithm "+std::to_string(algo));
+    throw runtime_error("Can't get key parameter for algorithm "+std::to_string(algo));
 
   DTime dt; dt.set();
   for(unsigned int n = 0; n < 100; ++n)
-    dckeCreate->create(bits);
-  cout<<"("<<dckeCreate->getBits()<<" bits) ";
+    dckeCreate->create(key_param);
+  cout<<"("<<dckeCreate->getBits()<<" key param) ";
   unsigned int udiffCreate = dt.udiff() / 100;
 
   {
@@ -638,7 +648,6 @@ static DNSKEYRecordContent makeDNSKEYFromDNSCryptoKeyEngine(const std::shared_pt
 
   drc.d_flags=flags;
   drc.d_key = pk->getPublicKeyString();
-
   return drc;
 }
 

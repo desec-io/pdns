@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(test_method_getBeforeAndAfterNamesAbsolute)
   DNSName after;
   BOOST_TEST_MESSAGE("Testing getBeforeAndAfterNamesAbsolute method");
 
-  backendUnderTest->getBeforeAndAfterNamesAbsolute(1, DNSName("middle.unit.test."), unhashed, before, after);
+  backendUnderTest->getBeforeAndAfterNamesAbsolute(-1, DNSName("middle.unit.test."), unhashed, before, after);
   BOOST_CHECK_EQUAL(unhashed.toString(), "middle.");
   BOOST_CHECK_EQUAL(before.toString(), "begin.");
   BOOST_CHECK_EQUAL(after.toString(), "stop.");
@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(test_method_feedRecord)
 {
   DNSResourceRecord resourceRecord;
   BOOST_TEST_MESSAGE("Testing feedRecord method");
-  backendUnderTest->startTransaction(DNSName("example.com."), 3);
+  backendUnderTest->startTransaction(DNSName("example.com."), 2);
   resourceRecord.qname = DNSName("example.com.");
   resourceRecord.qtype = QType::SOA;
   resourceRecord.qclass = QClass::IN;
@@ -329,7 +329,7 @@ BOOST_AUTO_TEST_CASE(test_method_feedRecord)
 
 BOOST_AUTO_TEST_CASE(test_method_replaceRRSet)
 {
-  backendUnderTest->startTransaction(DNSName("example.com."), 3);
+  backendUnderTest->startTransaction(DNSName("example.com."), 2);
   DNSResourceRecord resourceRecord;
   std::vector<DNSResourceRecord> rrset;
   BOOST_TEST_MESSAGE("Testing replaceRRSet method");
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(test_method_replaceRRSet)
 BOOST_AUTO_TEST_CASE(test_method_feedEnts)
 {
   BOOST_TEST_MESSAGE("Testing feedEnts method");
-  backendUnderTest->startTransaction(DNSName("example.com."), 3);
+  backendUnderTest->startTransaction(DNSName("example.com."), 2);
   map<DNSName, bool> nonterm = boost::assign::map_list_of(DNSName("_udp"), true)(DNSName("_sip._udp"), true);
   BOOST_CHECK(backendUnderTest->feedEnts(2, nonterm));
   backendUnderTest->commitTransaction();
@@ -355,7 +355,7 @@ BOOST_AUTO_TEST_CASE(test_method_feedEnts)
 BOOST_AUTO_TEST_CASE(test_method_feedEnts3)
 {
   BOOST_TEST_MESSAGE("Testing feedEnts3 method");
-  backendUnderTest->startTransaction(DNSName("example.com"), 3);
+  backendUnderTest->startTransaction(DNSName("example.com"), 2);
   NSEC3PARAMRecordContent ns3prc;
   ns3prc.d_iterations = 1;
   ns3prc.d_salt = "\u00aa\u00bb\u00cc\u00dd";
@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(test_method_feedEnts3)
 BOOST_AUTO_TEST_CASE(test_method_abortTransaction)
 {
   BOOST_TEST_MESSAGE("Testing abortTransaction method");
-  backendUnderTest->startTransaction(DNSName("example.com."), 3);
+  backendUnderTest->startTransaction(DNSName("example.com."), 2);
   BOOST_CHECK(backendUnderTest->abortTransaction());
 }
 

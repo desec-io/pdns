@@ -22,4 +22,3 @@ race:carbonDumpThread
 # can still be looking at the existing socket descriptors.
 # Actually writing to these is protected by a mutex, though.
 race:DownstreamState::reconnect
-signal:sigTermHandler

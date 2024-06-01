@@ -1,7 +1,6 @@
 from invoke import task
 from invoke.exceptions import Failure, UnexpectedExit
 
-import json
 import os
 import sys
 import time
@@ -9,14 +8,37 @@ import time
 auth_backend_ip_addr = os.getenv('AUTH_BACKEND_IP_ADDR', '127.0.0.1')
 
 clang_version = os.getenv('CLANG_VERSION', '13')
-repo_home = os.getenv('REPO_HOME', '.')
+quiche_version = '0.20.0'
+quiche_hash = '7125bc82ddcf38fbfbc69882ccb2723bfb4d5bfeb42718b8291d26ec06042e38'
 
+valgrind_build_deps = [
+    'build-essential',
+    'libc6-dbg',
+]
+oqs_build_deps = [
+    'astyle',
+    'cmake',
+    'gcc',
+    'ninja-build',
+    'libssl-dev',
+    'python3-pytest',
+    'python3-pytest-xdist',
+    'unzip',
+    'xsltproc',
+    'doxygen',
+    'graphviz',
+    'python3-yaml',
+]
+openssl32_build_deps = [
+    'gcc',
+    'make',
+    'perl',
+]
 all_build_deps = [
     'ccache',
     'libboost-all-dev',
     'libluajit-5.1-dev',
     'libsodium-dev',
-    'libssl-dev', # This will install libssl 1.1 on Debian 11 and libssl3 on Debian 12
     'libsystemd-dev',
     'libtool',
     'make',
@@ -48,7 +70,8 @@ auth_build_deps = [    # FIXME: perhaps we should be stealing these from the deb
     'libsqlite3-dev',
     'libyaml-cpp-dev',
     'libzmq3-dev',
-    'python3-venv',
+    'ruby-bundler',
+    'ruby-dev',
     'sqlite3',
     'unixodbc-dev',
     'cmake',
@@ -117,7 +140,8 @@ auth_test_deps = [   # FIXME: we should be generating some of these from shlibde
     'libzmq3-dev',
     'lmdb-utils',
     'prometheus',
-    'python3-venv',
+    'ruby-bundler',
+    'ruby-dev',
     'socat',
     'softhsm2',
     'unbound-host',
@@ -172,11 +196,10 @@ def install_clang_runtime(c):
 
 @task
 def ci_install_rust(c, repo):
-    with c.cd(f'{repo}/builder-support/helpers/'):
-        c.run('sudo sh install_rust.sh')
+    c.sudo(f'{repo}/builder-support/helpers/install_rust.sh')
 
 def install_libdecaf(c, product):
-    c.run('rm -rf /tmp/libdecaf && git clone https://git.code.sf.net/p/ed448goldilocks/code /tmp/libdecaf')
+    c.run('git clone https://git.code.sf.net/p/ed448goldilocks/code /tmp/libdecaf')
     with c.cd('/tmp/libdecaf'):
         c.run('git checkout 41f349')
         c.run(f'CC={get_c_compiler()} CXX={get_cxx_compiler()} '
@@ -191,6 +214,52 @@ def install_libdecaf(c, product):
     c.sudo(f'mkdir -p /opt/{product}/libdecaf')
     c.sudo(f'cp /usr/local/lib/libdecaf.so* /opt/{product}/libdecaf/.')
 
+def install_valgrind(c):
+    c.sudo('apt-get install -y ' + ' '.join(valgrind_build_deps))
+    c.run('mkdir /tmp/valgrind')
+    c.run('curl https://sourceware.org/pub/valgrind/valgrind-3.22.0.tar.bz2 > /tmp/valgrind/valgrind-3.22.0.tar.bz2')
+    with c.cd('/tmp/valgrind'):
+        c.run('tar -xvf valgrind-3.22.0.tar.bz2')
+    with c.cd('/tmp/valgrind/valgrind-3.22.0'):
+        c.run('./configure')
+        c.run('make')
+        c.run('sudo make install')
+        c.run('valgrind ls -l')
+
+@task
+def install_liboqs(c):
+    c.sudo('apt-get install -y ' + ' '.join(oqs_build_deps))
+    install_valgrind(c)
+    c.run('git clone https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs')
+    with c.cd('/tmp/liboqs'):
+        c.run('git checkout 31bdf13d4b8717b143f9ed584dfb8faceb80ebd9')
+    c.run('mkdir /tmp/liboqs/build')
+    with c.cd('/tmp/liboqs/build'):
+        c.run('cmake -GNinja -DOQS_EXPERIMENTAL_ENABLE_SIG_STFL_KEY_SIG_GEN=ON -DOQS_ENABLE_SIG_STFL_XMSS=ON ..')
+        c.run('ninja')
+        c.run('ninja run_tests')
+        c.run('sudo ninja install')
+@task
+def install_openssl32(c):
+    c.sudo('apt-get install -y ' + ' '.join(openssl32_build_deps))
+    c.run('git clone https://github.com/openssl/openssl.git /tmp/openssl')
+    with c.cd('/tmp/openssl'):
+        # checkout openssl3.2
+        c.run('git checkout openssl-3.2')
+        c.run('./Configure -lm no-docs --libdir=lib')
+        c.run('make')
+        c.run('sudo make install')
+
+@task
+def install_oqs_provider(c):
+    c.run('git clone https://github.com/open-quantum-safe/oqs-provider.git /tmp/oqs-provider')
+    with c.cd('/tmp/oqs-provider'):
+        c.run('git checkout e784ed12c69f0f6a73e185237d4259d566b5ed97')
+        c.run('cmake -S . -B _build')
+        c.run('cmake --build _build')
+        c.run('ctest --test-dir _build')
+        c.run('sudo cmake --install _build --config DebPack')
+
 @task
 def install_doc_deps(c):
     c.sudo('apt-get install -y ' + ' '.join(doc_deps))
@@ -199,14 +268,12 @@ def install_doc_deps(c):
 def install_doc_deps_pdf(c):
     c.sudo('apt-get install -y ' + ' '.join(doc_deps_pdf))
 
-def install_meson(c):
-    c.run(f'python3 -m venv {repo_home}/.venv')
-    c.run(f'. {repo_home}/.venv/bin/activate && pip install meson pyyaml ninja')
-
 @task
 def install_auth_build_deps(c):
     c.sudo('apt-get install -y --no-install-recommends ' + ' '.join(all_build_deps + git_build_deps + auth_build_deps))
-    install_meson(c)
+    install_liboqs(c)
+    install_openssl32(c)
+    install_oqs_provider(c)
     if os.getenv('DECAF_SUPPORT', 'no') == 'yes':
         install_libdecaf(c, 'pdns-auth')
 
@@ -218,9 +285,7 @@ def is_coverage_enabled():
             return False
     return os.getenv('COVERAGE') == 'yes'
 
-def get_coverage(meson=False):
-    if meson:
-        return '-D b_coverage=true' if os.getenv('COVERAGE') == 'yes' else ''
+def get_coverage():
     return '--enable-coverage=clang' if is_coverage_enabled() else ''
 
 @task
@@ -305,30 +370,25 @@ def install_rec_test_deps(c): # FIXME: rename this, we do way more than apt-get
 
 @task(optional=['skipXDP'])
 def install_dnsdist_test_deps(c, skipXDP=False): # FIXME: rename this, we do way more than apt-get
-    deps = 'libluajit-5.1-2 \
-            libboost-all-dev \
-            libcap2 \
-            libcdb1 \
-            libcurl4-openssl-dev \
-            libfstrm0 \
-            libgnutls30 \
-            libh2o-evloop0.13 \
-            liblmdb0 \
-            libnghttp2-14 \
-            "libre2-[1-9]+" \
-            libssl-dev \
-            libsystemd0 \
-            libsodium23 \
-            lua-socket \
-            patch \
-            protobuf-compiler \
-            python3-venv snmpd prometheus'
-    if not skipXDP:
-        deps = deps + '\
-               libbpf1 \
-               libxdp1'
-
-    c.sudo(f'apt-get install -y {deps}')
+    c.sudo('apt-get install -y \
+              libluajit-5.1-2 \
+              libboost-all-dev \
+              libcap2 \
+              libcdb1 \
+              libcurl4-openssl-dev \
+              libfstrm0 \
+              libgnutls30 \
+              libh2o-evloop0.13 \
+              liblmdb0 \
+              libnghttp2-14 \
+              "libre2-[1-9]+" \
+              libssl-dev \
+              libsystemd0 \
+              libsodium23 \
+              lua-socket \
+              patch \
+              protobuf-compiler \
+              python3-venv snmpd prometheus')
     c.run('sed "s/agentxperms 0700 0755 dnsdist/agentxperms 0777 0755/g" regression-tests.dnsdist/snmpd.conf | sudo tee /etc/snmp/snmpd.conf')
     c.sudo('/etc/init.d/snmpd restart')
     time.sleep(5)
@@ -337,15 +397,21 @@ def install_dnsdist_test_deps(c, skipXDP=False): # FIXME: rename this, we do way
 @task
 def install_rec_build_deps(c):
     c.sudo('apt-get install -y --no-install-recommends ' +  ' '.join(all_build_deps + git_build_deps + rec_build_deps))
+    install_liboqs(c)
+    install_openssl32(c)
+    install_oqs_provider(c)
 
 @task(optional=['skipXDP'])
 def install_dnsdist_build_deps(c, skipXDP=False):
-    c.sudo('apt-get install -y --no-install-recommends ' +  ' '.join(all_build_deps + git_build_deps + dnsdist_build_deps + (dnsdist_xdp_build_deps if not skipXDP else [])))
+    c.sudo('apt-get install -y --no-install-recommends ' +  ' '.join(all_build_deps + git_build_deps + dnsdist_build_deps))
+    install_liboqs(c)
+    install_openssl32(c)
+    install_oqs_provider(c)
+
 
 @task
-def ci_autoconf(c, meson=False):
-    if not meson:
-        c.run('autoreconf -vfi')
+def ci_autoconf(c):
+    c.run('autoreconf -vfi')
 
 @task
 def ci_docs_rec_generate(c):
@@ -382,29 +448,23 @@ def ci_docs_add_ssh(c, ssh_key, host_key):
     c.run(f'echo "{host_key}" > ~/.ssh/known_hosts')
 
 
-def get_sanitizers(meson=False):
+def get_sanitizers():
     sanitizers = os.getenv('SANITIZERS', '')
-    if meson:
-        return f'-D b_sanitize={sanitizers}' if sanitizers != '' else ''
     if sanitizers != '':
         sanitizers = sanitizers.split('+')
         sanitizers = ['--enable-' + sanitizer for sanitizer in sanitizers]
         sanitizers = ' '.join(sanitizers)
     return sanitizers
 
-def get_unit_tests(meson=False, auth=False):
+def get_unit_tests(auth=False):
     if os.getenv('UNIT_TESTS') != 'yes':
         return ''
-    if meson:
-        return '-D unit-tests=true -D unit-tests-backends=true' if auth else '-D unit-tests=true'
     return '--enable-unit-tests --enable-backend-unit-tests' if auth else '--enable-unit-tests'
 
 def get_build_concurrency(default=8):
     return os.getenv('CONCURRENCY', default)
 
-def get_fuzzing_targets(meson=False):
-    if meson:
-        return '-D fuzz-targets=true' if os.getenv('FUZZING_TARGETS') == 'yes' else ''
+def get_fuzzing_targets():
     return '--enable-fuzz-targets' if os.getenv('FUZZING_TARGETS') == 'yes' else ''
 
 def is_compiler_clang():
@@ -460,25 +520,10 @@ def get_base_configure_cmd(additional_c_flags='', additional_cxx_flags='', enabl
         get_sanitizers()
     ])
 
-def get_base_configure_cmd_meson(build_dir, additional_c_flags='', additional_cxx_flags='', enable_systemd=True, enable_sodium=True):
-    cflags = " ".join([get_cflags(), additional_c_flags])
-    cxxflags = " ".join([get_cxxflags(), additional_cxx_flags])
-    return " ".join([
-        f'CFLAGS="{cflags}"',
-        f'CXXFLAGS="{cxxflags}"',
-        f"CC='{get_c_compiler()}'",
-        f"CXX='{get_cxx_compiler()}'",
-        f'. {repo_home}/.venv/bin/activate && meson setup {build_dir}',
-        "-D systemd={}".format("enabled" if enable_systemd else "disabled"),
-        "-D signers-libsodium={}".format("enabled" if enable_sodium else "disabled"),
-        "-D hardening-fortify-source=auto",
-        "-D auto-var-init=pattern",
-        get_coverage(meson=True),
-        get_sanitizers(meson=True)
-    ])
 
-def ci_auth_configure_autotools(c):
-    unittests = get_unit_tests(auth=True)
+@task
+def ci_auth_configure(c):
+    unittests = get_unit_tests(True)
     fuzz_targets = get_fuzzing_targets()
     modules = " ".join([
         "bind",
@@ -516,86 +561,22 @@ def ci_auth_configure_autotools(c):
         c.run('cat config.log')
         raise UnexpectedExit(res)
 
-def ci_auth_configure_meson(c, build_dir):
-    unittests = get_unit_tests(meson=True, auth=True)
-    fuzz_targets = get_fuzzing_targets(meson=True)
-    configure_cmd = " ".join([
-        "LDFLAGS='-L/usr/local/lib -Wl,-rpath,/usr/local/lib'",
-        get_base_configure_cmd_meson(build_dir),
-        "-D module-bind=static",
-        "-D module-geoip=static",
-        "-D module-gmysql=static",
-        "-D module-godbc=static",
-        "-D module-gpgsql=static",
-        "-D module-gsqlite3=static",
-        "-D module-ldap=static",
-        "-D module-lmdb=static",
-        "-D module-lua2=static",
-        "-D module-pipe=static",
-        "-D module-remote=static",
-        "-D module-remote-zeromq=true",
-        "-D module-tinydns=static",
-        "-D tools=true",
-        "-D dns-over-tls=true",
-        "-D experimental-pkcs11=enabled",
-        "-D experimental-gss-tsig=enabled",
-        "-D signers-libdecaf=enabled" if os.getenv('DECAF_SUPPORT', 'no') == 'yes' else '',
-        "-D prefix=/opt/pdns-auth",
-        "-D tools-ixfrdist=true",
-        unittests,
-        fuzz_targets
-    ])
-    res = c.run(configure_cmd, warn=True)
-    if res.exited != 0:
-        c.run(f'cat {build_dir}/meson-logs/meson-log.txt')
-        raise UnexpectedExit(res)
 
 @task
-def ci_auth_configure(c, build_dir=None, meson=False):
-    if meson:
-        ci_auth_configure_meson(c, build_dir)
-    else:
-        ci_auth_configure_autotools(c)
-        if build_dir:
-            ci_make_distdir(c)
-            with c.cd(f'{build_dir}'):
-                ci_auth_configure_autotools(c)
-
-@task
-def ci_rec_configure(c, features):
+def ci_rec_configure(c):
     unittests = get_unit_tests()
 
-    if features == 'full':
-        configure_cmd = " ".join([
-            get_base_configure_cmd(),
-            "--prefix=/opt/pdns-recursor",
-            "--enable-option-checking",
-            "--enable-verbose-logging",
-            "--enable-dns-over-tls",
-            "--enable-nod",
-            "--with-libcap",
-            "--with-lua=luajit",
-            "--with-net-snmp",
-            unittests,
-        ])
-    else:
-        configure_cmd = " ".join([
-            get_base_configure_cmd(),
-            "--prefix=/opt/pdns-recursor",
-            "--enable-option-checking",
-            "--enable-verbose-logging",
-            "--disable-dns-over-tls",
-            "--disable-dnstap",
-            "--disable-nod",
-            "--disable-systemd",
-            "--with-lua=luajit",
-            "--without-libcap",
-            "--without-libcurl",
-            "--without-libdecaf",
-            "--without-libsodium",
-            "--without-net-snmp",
-            unittests,
-        ])
+    configure_cmd = " ".join([
+        get_base_configure_cmd(),
+        "--enable-nod",
+        "--prefix=/opt/pdns-recursor",
+        "--with-lua=luajit",
+        "--with-libcap",
+        "--with-net-snmp",
+        "--enable-dns-over-tls",
+        "--enable-verbose-logging",
+        unittests,
+    ])
     res = c.run(configure_cmd, warn=True)
     if res.exited != 0:
         c.run('cat config.log')
@@ -677,7 +658,7 @@ def ci_dnsdist_configure(c, features):
         features_set,
         unittests,
         fuzztargets,
-        '--enable-lto=thin',
+        ' --enable-lto=thin',
         '--prefix=/opt/dnsdist'
     ])
 
@@ -693,16 +674,6 @@ def ci_auth_make(c):
 @task
 def ci_auth_make_bear(c):
     c.run(f'bear --append -- make -j{get_build_concurrency()} -k V=1')
-
-def run_ninja(c):
-    c.run(f'. {repo_home}/.venv/bin/activate && ninja -j{get_build_concurrency()} --verbose')
-
-@task
-def ci_auth_build(c, meson=False):
-    if meson:
-        run_ninja(c)
-    else:
-        ci_auth_make_bear(c)
 
 @task
 def ci_rec_make(c):
@@ -724,21 +695,19 @@ def ci_dnsdist_make_bear(c):
 
 @task
 def ci_auth_install_remotebackend_test_deps(c):
+    c.sudo('apt-get install -y ruby-full ruby-bundler ruby-dev')
+    with c.cd('modules/remotebackend'):
+      # c.run('bundle config set path vendor/bundle')
+      c.run('sudo ruby -S bundle install')
     c.sudo('apt-get install -y socat')
 
 @task
-def ci_auth_run_unit_tests(c, meson=False):
-    if meson:
-        suite_timeout_sec = 120
-        logfile = 'meson-logs/testlog.txt'
-        res = c.run(f'. {repo_home}/.venv/bin/activate && meson test --verbose -t {suite_timeout_sec}', warn=True)
-    else:
-        logfile = 'pdns/test-suite.log'
-        res = c.run('make check', warn=True)
+def ci_auth_run_unit_tests(c):
+    res = c.run('make check', warn=True)
     if res.exited != 0:
-        c.run(f'cat {logfile}', warn=True)
-        c.run('cat ../modules/remotebackend/*.log', warn=True)
-        raise UnexpectedExit(res)
+      c.run('cat pdns/test-suite.log', warn=True)
+      c.run('cat modules/remotebackend/test-suite.log', warn=True)
+      raise UnexpectedExit(res)
 
 @task
 def ci_rec_run_unit_tests(c):
@@ -756,16 +725,11 @@ def ci_dnsdist_run_unit_tests(c):
 
 @task
 def ci_make_distdir(c):
-    c.run('make distdir')
-
-@task
-def ci_auth_install(c, meson=False):
-    if not meson:
-        c.run('make install') # FIXME: this builds auth docs - again
+    res = c.run('make distdir')
 
 @task
 def ci_make_install(c):
-    c.run('make install')
+    res = c.run('make install') # FIXME: this builds auth docs - again
 
 @task
 def add_auth_repo(c, dist_name, dist_release_name, pdns_repo_version):
@@ -862,22 +826,6 @@ backend_regress_tests = dict(
     geoip_mmdb = ['geoip'],
 )
 
-backend_rootzone_tests = dict(
-    geoip = False,
-    geoip_mmdb = False,
-    lua2 = False,
-    ldap = False,
-    tinydns = False,
-    remote = False,
-    bind = True,
-    lmdb = True,
-    gmysql = True,
-    gpgsql = True,
-    gsqlite3 = True,
-    godbc_sqlite3 = True,
-    godbc_mssql = True,
-)
-
 godbc_mssql_credentials = {"username": "sa", "password": "SAsa12%%-not-a-secret-password"}
 
 godbc_config = f'''
@@ -932,7 +880,6 @@ def setup_softhsm(c):
 @task
 def test_auth_backend(c, backend):
     pdns_auth_env_vars = f'PDNS=/opt/pdns-auth/sbin/pdns_server PDNS2=/opt/pdns-auth/sbin/pdns_server SDIG=/opt/pdns-auth/bin/sdig NOTIFY=/opt/pdns-auth/bin/pdns_notify NSEC3DIG=/opt/pdns-auth/bin/nsec3dig SAXFR=/opt/pdns-auth/bin/saxfr ZONE2SQL=/opt/pdns-auth/bin/zone2sql ZONE2LDAP=/opt/pdns-auth/bin/zone2ldap ZONE2JSON=/opt/pdns-auth/bin/zone2json PDNSUTIL=/opt/pdns-auth/bin/pdnsutil PDNSCONTROL=/opt/pdns-auth/bin/pdns_control PDNSSERVER=/opt/pdns-auth/sbin/pdns_server SDIG=/opt/pdns-auth/bin/sdig GMYSQLHOST={auth_backend_ip_addr} GMYSQL2HOST={auth_backend_ip_addr} MYSQL_HOST={auth_backend_ip_addr} PGHOST={auth_backend_ip_addr} PGPORT=5432'
-    backend_env_vars = ''
 
     if backend == 'remote':
         ci_auth_install_remotebackend_test_deps(c)
@@ -945,32 +892,39 @@ def test_auth_backend(c, backend):
 
     if backend == 'bind':
         setup_softhsm(c)
-        backend_env_vars = 'SOFTHSM2_CONF=/opt/pdns-auth/softhsm/softhsm2.conf'
+        with c.cd('regression-tests'):
+            for variant in backend_regress_tests[backend]:
+                c.run(f'{pdns_auth_env_vars} SOFTHSM2_CONF=/opt/pdns-auth/softhsm/softhsm2.conf ./start-test-stop 5300 {variant}')
+        return
 
     if backend == 'godbc_sqlite3':
         setup_godbc_sqlite3(c)
-        backend_env_vars = 'GODBC_SQLITE3_DSN=pdns-sqlite3-1'
+        with c.cd('regression-tests'):
+            for variant in backend_regress_tests[backend]:
+                c.run(f'{pdns_auth_env_vars} GODBC_SQLITE3_DSN=pdns-sqlite3-1 ./start-test-stop 5300 {variant}')
+        return
 
     if backend == 'godbc_mssql':
         setup_godbc_mssql(c)
-        backend_env_vars = f'GODBC_MSSQL_PASSWORD={godbc_mssql_credentials["password"]} GODBC_MSSQL_USERNAME={godbc_mssql_credentials["username"]} GODBC_MSSQL_DSN=pdns-mssql-docker GODBC_MSSQL2_PASSWORD={godbc_mssql_credentials["password"]} GODBC_MSSQL2_USERNAME={godbc_mssql_credentials["username"]} GODBC_MSSQL2_DSN=pdns-mssql-docker'
+        with c.cd('regression-tests'):
+            for variant in backend_regress_tests[backend]:
+                c.run(f'{pdns_auth_env_vars} GODBC_MSSQL_PASSWORD={godbc_mssql_credentials["password"]} GODBC_MSSQL_USERNAME={godbc_mssql_credentials["username"]} GODBC_MSSQL_DSN=pdns-mssql-docker GODBC_MSSQL2_PASSWORD={godbc_mssql_credentials["password"]} GODBC_MSSQL2_USERNAME={godbc_mssql_credentials["username"]} GODBC_MSSQL2_DSN=pdns-mssql-docker ./start-test-stop 5300 {variant}')
+        return
 
     if backend == 'ldap':
         setup_ldap_client(c)
 
     if backend == 'geoip_mmdb':
-        backend_env_vars = 'geoipdatabase=../modules/geoipbackend/regression-tests/GeoLiteCity.mmdb'
+        with c.cd('regression-tests'):
+            for variant in backend_regress_tests[backend]:
+                c.run(f'{pdns_auth_env_vars} geoipdatabase=../modules/geoipbackend/regression-tests/GeoLiteCity.mmdb ./start-test-stop 5300 {variant}')
+        return
 
     with c.cd('regression-tests'):
         if backend == 'lua2':
             c.run('touch trustedkeys')  # avoid silly error during cleanup
         for variant in backend_regress_tests[backend]:
-            c.run(f'{pdns_auth_env_vars} {backend_env_vars} ./start-test-stop 5300 {variant}')
-
-    if backend_rootzone_tests[backend]:
-        with c.cd('regression-tests.rootzone'):
-            for variant in backend_regress_tests[backend]:
-                c.run(f'{pdns_auth_env_vars} {backend_env_vars} ./start-test-stop 5300 {variant}')
+            c.run(f'{pdns_auth_env_vars} ./start-test-stop 5300 {variant}')
 
     if backend == 'gsqlite3':
         if os.getenv('SKIP_IPV6_TESTS'):
@@ -991,7 +945,7 @@ def test_dnsdist(c):
     c.run('ls -ald /var /var/agentx /var/agentx/master')
     c.run('ls -al /var/agentx/master')
     with c.cd('regression-tests.dnsdist'):
-        c.run('DNSDISTBIN=/opt/dnsdist/bin/dnsdist LD_LIBRARY_PATH=/opt/dnsdist/lib/ ENABLE_SUDO_TESTS=1 ./runtests')
+        c.run('DNSDISTBIN=/opt/dnsdist/bin/dnsdist LD_LIBRARY_PATH=/opt/dnsdist/lib/ ./runtests')
 
 @task
 def test_regression_recursor(c):
@@ -1043,12 +997,7 @@ def coverity_upload(c, email, project, tarball):
             https://scan.coverity.com/builds?project={project}', hide=True)
 
 @task
-def ci_build_and_install_quiche(c, repo):
-    with open(f'{repo}/builder-support/helpers/quiche.json') as quiche_json:
-        quiche_data = json.load(quiche_json)
-        quiche_version = quiche_data['version']
-        quiche_hash = quiche_data['SHA256SUM']
-
+def ci_build_and_install_quiche(c):
     # we have to pass -L because GitHub will do a redirect, sadly
     c.run(f'curl -L -o quiche-{quiche_version}.tar.gz https://github.com/cloudflare/quiche/archive/{quiche_version}.tar.gz')
     # Line below should echo two spaces between digest and name

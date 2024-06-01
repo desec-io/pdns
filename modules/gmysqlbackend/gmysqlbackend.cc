@@ -52,16 +52,17 @@ gMySQLBackend::gMySQLBackend(const string& mode, const string& suffix) :
 
 void gMySQLBackend::reconnect()
 {
-  setDB(std::unique_ptr<SSql>(new SMySQL(getArg("dbname"),
-                                         getArg("host"),
-                                         getArgAsNum("port"),
-                                         getArg("socket"),
-                                         getArg("user"),
-                                         getArg("password"),
-                                         getArg("group"),
-                                         mustDo("innodb-read-committed"),
-                                         getArgAsNum("timeout"),
-                                         mustDo("thread-cleanup"))));
+  setDB(new SMySQL(getArg("dbname"),
+                   getArg("host"),
+                   getArgAsNum("port"),
+                   getArg("socket"),
+                   getArg("user"),
+                   getArg("password"),
+                   getArg("group"),
+                   mustDo("innodb-read-committed"),
+                   getArgAsNum("timeout"),
+                   mustDo("thread-cleanup"),
+                   mustDo("ssl")));
   allocateStatements();
 }
 
@@ -184,7 +185,7 @@ public:
   //! This reports us to the main UeberBackend class
   gMySQLLoader()
   {
-    BackendMakers().report(std::make_unique<gMySQLFactory>("gmysql"));
+    BackendMakers().report(new gMySQLFactory("gmysql"));
     g_log << Logger::Info << "[gmysqlbackend] This is the gmysql backend version " VERSION
 #ifndef REPRODUCIBLE
           << " (" __DATE__ " " __TIME__ ")"

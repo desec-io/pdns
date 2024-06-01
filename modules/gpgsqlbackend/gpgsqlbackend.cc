@@ -40,13 +40,13 @@ gPgSQLBackend::gPgSQLBackend(const string& mode, const string& suffix) :
   GSQLBackend(mode, suffix)
 {
   try {
-    setDB(std::unique_ptr<SSql>(new SPgSQL(getArg("dbname"),
-                                           getArg("host"),
-                                           getArg("port"),
-                                           getArg("user"),
-                                           getArg("password"),
-                                           getArg("extra-connection-parameters"),
-                                           mustDo("prepared-statements"))));
+    setDB(new SPgSQL(getArg("dbname"),
+                     getArg("host"),
+                     getArg("port"),
+                     getArg("user"),
+                     getArg("password"),
+                     getArg("extra-connection-parameters"),
+                     mustDo("prepared-statements")));
   }
 
   catch (SSqlException& e) {
@@ -192,7 +192,7 @@ public:
   //! This reports us to the main UeberBackend class
   gPgSQLLoader()
   {
-    BackendMakers().report(std::make_unique<gPgSQLFactory>("gpgsql"));
+    BackendMakers().report(new gPgSQLFactory("gpgsql"));
     g_log << Logger::Info << "[gpgsqlbackend] This is the gpgsql backend version " VERSION
 #ifndef REPRODUCIBLE
           << " (" __DATE__ " " __TIME__ ")"

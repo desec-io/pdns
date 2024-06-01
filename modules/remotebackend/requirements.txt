@@ -1,2 +1,0 @@
-Pdns-Remotebackend==0.8.0
-pyzmq==25.1.2

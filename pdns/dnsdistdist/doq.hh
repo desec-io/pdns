@@ -49,7 +49,6 @@ struct DOQFrontend
   ~DOQFrontend();
 
   void setup();
-  void reloadCertificates();
 
   std::unique_ptr<DOQServerConfig> d_server_config;
   dnsdist::doq::QuicheParams d_quicheParams;

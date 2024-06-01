@@ -39,6 +39,9 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <linux/if_ether.h>
+#include <linux/types.h>
+#include <linux/udp.h>
 
 #include <xdp/xsk.h>
 
@@ -182,10 +185,8 @@ public:
   }
 };
 
-struct ethhdr;
 struct iphdr;
 struct ipv6hdr;
-struct udphdr;
 
 class XskPacket
 {

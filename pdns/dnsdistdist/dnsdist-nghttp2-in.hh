@@ -87,7 +87,6 @@ private:
 
   void stopIO();
   uint32_t getConcurrentStreamsCount() const;
-  void updateIO(IOState newState, const timeval& now) override;
   void updateIO(IOState newState, const FDMultiplexer::callbackfunc_t& callback);
   void handleIOError();
   bool sendResponse(StreamID streamID, PendingQuery& context, uint16_t responseCode, const HeadersMap& customResponseHeaders, const std::string& contentType = "", bool addContentType = true);
@@ -117,10 +116,6 @@ private:
   /* Whether we have data that we want to write to the socket,
      but the socket is full. */
   bool d_pendingWrite{false};
-  /* Whether we are currently inside the readHTTPData function,
-     which is not reentrant and could be called from itself via
-     the nghttp2 callbacks */
-  bool d_inReadFunction{false};
 };
 
 class NGHTTP2Headers

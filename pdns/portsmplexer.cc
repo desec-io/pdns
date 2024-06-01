@@ -147,7 +147,9 @@ void PortsFDMultiplexer::getAvailableFDs(std::vector<int>& fds, int timeout)
 
 int PortsFDMultiplexer::run(struct timeval* now, int timeout)
 {
-  InRun guard(d_inrun);
+  if (d_inrun) {
+    throw FDMultiplexerException("FDMultiplexer::run() is not reentrant!\n");
+  }
 
   struct timespec timeoutspec;
   timeoutspec.tv_sec = timeout / 1000;
@@ -175,6 +177,7 @@ int PortsFDMultiplexer::run(struct timeval* now, int timeout)
     return 0;
   }
 
+  d_inrun = true;
   int count = 0;
   for (unsigned int n = 0; n < numevents; ++n) {
     if (d_pevents[n].portev_events & POLLIN || d_pevents[n].portev_events & POLLERR || d_pevents[n].portev_events & POLLHUP) {
@@ -199,6 +202,7 @@ int PortsFDMultiplexer::run(struct timeval* now, int timeout)
     }
   }
 
+  d_inrun = false;
   return count;
 }
 

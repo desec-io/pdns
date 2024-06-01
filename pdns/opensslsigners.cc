@@ -31,8 +31,10 @@
 #ifdef HAVE_LIBCRYPTO_ECDSA
 #include <openssl/ecdsa.h>
 #endif
-#if defined(HAVE_LIBCRYPTO_ED25519) || defined(HAVE_LIBCRYPTO_ED448)
+#if defined(HAVE_LIBCRYPTO_ED25519) || defined(HAVE_LIBCRYPTO_ED448) || defined(HAVE_LIBCRYPTO_PQC)
 #include <openssl/evp.h>
+#include <openssl/asn1.h>
+
 #endif
 #include <openssl/bn.h>
 #include <openssl/sha.h>
@@ -43,6 +45,7 @@
 #include <openssl/core_names.h>
 #include <openssl/param_build.h>
 #include <openssl/params.h>
+#include <openssl/provider.h>
 #endif
 #include <openssl/opensslv.h>
 #include <openssl/err.h>
@@ -1747,6 +1750,281 @@ void OpenSSLECDSADNSCryptoKeyEngine::fromPublicKeyString(const std::string& cont
     throw runtime_error(getName() + " setting public key failed");
   }
 #endif
+}
+#endif
+
+#ifdef HAVE_LIBCRYPTO_PQC
+
+auto oqs_provider = std::unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER*)>(nullptr, OSSL_PROVIDER_unload);
+auto default_provider = std::unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER*)>(nullptr, OSSL_PROVIDER_unload);
+
+class OpenSSLPQCDNSCryptoKeyEngine : public DNSCryptoKeyEngine
+{
+public:
+  explicit OpenSSLPQCDNSCryptoKeyEngine(unsigned int algo) :
+    DNSCryptoKeyEngine(algo), d_pqckey(std::unique_ptr<EVP_PKEY, void (*)(EVP_PKEY*)>(nullptr, EVP_PKEY_free))
+  {
+    int ret = RAND_status();
+    if (ret != 1) {
+      throw runtime_error(getName() + " insufficient entropy");
+    }
+
+    if (d_algorithm == DNSSECKeeper::FALCON512) {
+      d_priv_len = 1281;
+      d_pub_len = 897;
+      d_sig_len = 666;
+      d_algname = "falconpadded512";
+    }
+    else if (d_algorithm == DNSSECKeeper::DILITHIUM2) {
+      d_priv_len = 2528;
+      d_pub_len = 1312;
+      d_sig_len = 2420;
+      d_algname = "dilithium2";
+    }
+    else if (d_algorithm == DNSSECKeeper::SPHINCSSHA256128S) {
+      d_priv_len = 64;
+      d_pub_len = 32;
+      d_sig_len = 7856;
+      d_algname = "sphincssha2128ssimple";
+    }
+
+    if (d_priv_len == 0) {
+      throw runtime_error(getName() + " unknown algorithm " + std::to_string(d_algorithm));
+    }
+  }
+
+  ~OpenSSLPQCDNSCryptoKeyEngine()
+  {
+  }
+
+  string getName() const override { return "OpenSSL PQC"; }
+  int getBits() const override { return d_priv_len << 3; }
+
+  void create(unsigned int bits) override;
+  [[nodiscard]] storvector_t convertToISCVector() const override;
+  [[nodiscard]] std::string sign(const std::string& message) const override;
+  [[nodiscard]] bool verify(const std::string& message, const std::string& signature) const override;
+  [[nodiscard]] std::string getPublicKeyString() const override;
+
+  void fromISCMap(DNSKEYRecordContent& drc, std::map<std::string, std::string>& stormap) override;
+  void fromPublicKeyString(const std::string& content) override;
+  [[nodiscard]] bool checkKey(std::optional<std::reference_wrapper<vector<string>>> errorMessages) const override;
+
+  static std::unique_ptr<DNSCryptoKeyEngine> maker(unsigned int algorithm)
+  {
+    if (!oqs_provider) {
+      oqs_provider = std::unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER*)>(OSSL_PROVIDER_load(nullptr, "oqsprovider"), OSSL_PROVIDER_unload);
+      if (!oqs_provider) {
+        throw runtime_error("failed to load oqs provider");
+      }
+      default_provider = std::unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER*)>(OSSL_PROVIDER_load(nullptr, "default"), OSSL_PROVIDER_unload);
+      if (!default_provider) {
+        throw runtime_error("failed to load default provider");
+      }
+    }
+    return make_unique<OpenSSLPQCDNSCryptoKeyEngine>(algorithm);
+  }
+
+private:
+  size_t d_priv_len{0};
+  size_t d_pub_len{0};
+  size_t d_sig_len{0};
+  std::string d_algname{""};
+
+  std::unique_ptr<EVP_PKEY, void (*)(EVP_PKEY*)> d_pqckey;
+};
+
+bool OpenSSLPQCDNSCryptoKeyEngine::checkKey(std::optional<std::reference_wrapper<vector<string>>> errorMessages) const
+{
+  (void)errorMessages;
+  if (d_algorithm == DNSSECKeeper::FALCON512) {
+    return (d_priv_len == 1281 && d_pub_len == 897 && d_sig_len == 666
+            && d_algname == "falconpadded512");
+  }
+  else if (d_algorithm == DNSSECKeeper::DILITHIUM2) {
+    return (d_priv_len == 2528 && d_pub_len == 1312 && d_sig_len == 2420
+            && d_algname == "dilithium2");
+  }
+  else if (d_algorithm == DNSSECKeeper::SPHINCSSHA256128S) {
+    return (d_priv_len == 64 && d_pub_len == 32 && d_sig_len == 7856
+            && d_algname == "sphincssha2128ssimple");
+  }
+  else {
+    return false;
+  }
+}
+
+void OpenSSLPQCDNSCryptoKeyEngine::create(unsigned int bits)
+{
+  if (bits != (d_priv_len << 3)) {
+    throw runtime_error("Keysize not supported by " + getName());
+  }
+  auto ctx = EVP_PKEY_CTX_new_from_name(nullptr, d_algname.c_str(), nullptr);
+  if (!ctx) {
+    throw runtime_error(getName() + " CTX initialisation failed");
+  }
+  auto pctx = std::unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX*)>(ctx, EVP_PKEY_CTX_free);
+  if (!pctx) {
+    throw runtime_error(getName() + " context initialization failed");
+  }
+  if (EVP_PKEY_keygen_init(pctx.get()) < 1) {
+    throw runtime_error(getName() + " keygen initialization failed");
+  }
+  EVP_PKEY* new_key = nullptr;
+  if (EVP_PKEY_keygen(pctx.get(), &new_key) < 1) {
+    throw runtime_error(getName() + " key generation failed");
+  }
+
+  d_pqckey = std::unique_ptr<EVP_PKEY, void (*)(EVP_PKEY*)>(new_key, EVP_PKEY_free);
+}
+
+DNSCryptoKeyEngine::storvector_t OpenSSLPQCDNSCryptoKeyEngine::convertToISCVector() const
+{
+  storvector_t storvect;
+  string algorithm;
+
+  if (d_algorithm == DNSSECKeeper::FALCON512) {
+    algorithm = std::to_string(d_algorithm) + " (FALCON512)";
+  }
+  else if (d_algorithm == DNSSECKeeper::DILITHIUM2) {
+    algorithm = std::to_string(d_algorithm) + " (DILITHIUM2)";
+  }
+  else if (d_algorithm == DNSSECKeeper::SPHINCSSHA256128S) {
+    algorithm = std::to_string(d_algorithm) + " (SPHINCS+-SHA256-128S)";
+  }
+  else {
+    algorithm = " ? (?)";
+  }
+
+  storvect.push_back(make_pair("Algorithm", algorithm));
+
+  string buf;
+  size_t len = d_priv_len;
+  buf.resize(len);
+
+  if (EVP_PKEY_get_raw_private_key(d_pqckey.get(), reinterpret_cast<unsigned char*>(&buf.at(0)), &len) < 1) {
+  }
+  storvect.push_back(make_pair("PrivateKey", buf));
+
+  // Clear buffer and put public key into store vector
+  buf.clear();
+  size_t len_pub = d_pub_len;
+  buf.resize(len_pub);
+
+  if (EVP_PKEY_get_raw_public_key(d_pqckey.get(), reinterpret_cast<unsigned char*>(&buf.at(0)), &len_pub) < 1) {
+    throw runtime_error(getName() + " Could not get public key from d_pqckey");
+  }
+  storvect.push_back(make_pair("PublicKey", buf));
+
+  return storvect;
+}
+
+std::string OpenSSLPQCDNSCryptoKeyEngine::sign(const std::string& message) const
+{
+  auto mdctx = std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+  if (!mdctx) {
+    throw runtime_error(getName() + " MD context initialization failed");
+  }
+  if (EVP_DigestSignInit(mdctx.get(), nullptr, nullptr, nullptr, d_pqckey.get()) < 1) {
+    throw runtime_error(getName() + " unable to initialize signer");
+  }
+
+  string msgToSign = message;
+
+  size_t siglen = d_sig_len;
+  string signature;
+  signature.resize(siglen);
+
+  if (EVP_DigestSign(mdctx.get(),
+                     reinterpret_cast<unsigned char*>(&signature.at(0)), &siglen,
+                     reinterpret_cast<unsigned char*>(&msgToSign.at(0)), msgToSign.length())
+      < 1) {
+    throw runtime_error(getName() + " signing error");
+  }
+  // Resize signature to enable verifying of right length
+  signature.resize(siglen);
+  return signature;
+}
+
+bool OpenSSLPQCDNSCryptoKeyEngine::verify(const std::string& message, const std::string& signature) const
+{
+  auto mdctx = std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+  if (!mdctx) {
+    throw runtime_error(getName() + " MD context initialization failed");
+  }
+  if (EVP_DigestVerifyInit(mdctx.get(), nullptr, nullptr, nullptr, d_pqckey.get()) < 1) {
+    throw runtime_error(getName() + " unable to initialize signer");
+  }
+
+  string check_signature = signature;
+  string check_msg = message;
+
+  auto r = EVP_DigestVerify(mdctx.get(),
+                            reinterpret_cast<unsigned char*>(&check_signature.at(0)), check_signature.length(),
+                            reinterpret_cast<unsigned char*>(&check_msg.at(0)), check_msg.length());
+  if (r < 0) {
+    throw runtime_error(getName() + " verification failure");
+  }
+
+  return (r == 1);
+}
+
+std::string OpenSSLPQCDNSCryptoKeyEngine::getPublicKeyString() const
+{
+  string buf;
+  size_t len = d_pub_len;
+  buf.resize(len);
+  if (d_pqckey.get() == NULL) {
+    throw runtime_error(getName() + " null pointer");
+  }
+  if (EVP_PKEY_get_raw_public_key(d_pqckey.get(), reinterpret_cast<unsigned char*>(&buf.at(0)), &len) < 1) {
+    throw runtime_error(getName() + " unable to get public key from key struct");
+  }
+
+  return buf;
+}
+
+void OpenSSLPQCDNSCryptoKeyEngine::fromISCMap(DNSKEYRecordContent& drc, std::map<std::string, std::string>& stormap)
+{
+  drc.d_algorithm = atoi(stormap["algorithm"].c_str());
+  if (drc.d_algorithm != d_algorithm) {
+    throw runtime_error(getName() + " tried to feed an algorithm " + std::to_string(drc.d_algorithm) + " to a " + std::to_string(d_algorithm) + " key");
+  }
+  auto param_bld = std::unique_ptr<OSSL_PARAM_BLD, void (*)(OSSL_PARAM_BLD*)>(OSSL_PARAM_BLD_new(), OSSL_PARAM_BLD_free);
+
+  if ((!param_bld) || !OSSL_PARAM_BLD_push_octet_string(param_bld.get(), "priv", reinterpret_cast<unsigned char*>(&stormap["privatekey"].at(0)), stormap["privatekey"].length()) || !OSSL_PARAM_BLD_push_octet_string(param_bld.get(), "pub", reinterpret_cast<unsigned char*>(&stormap["publickey"].at(0)), stormap["publickey"].length())) {
+    throw std::runtime_error(getName() + " could not fully set keypair parameters");
+  }
+  auto params = std::unique_ptr<OSSL_PARAM, void (*)(OSSL_PARAM*)>(OSSL_PARAM_BLD_to_param(param_bld.get()), OSSL_PARAM_free);
+  if (!params) {
+    throw std::runtime_error(getName() + " could not build OSSL PARAMs");
+  }
+  auto ctx = std::unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX*)>(EVP_PKEY_CTX_new_from_name(NULL, d_algname.c_str(), NULL), EVP_PKEY_CTX_free);
+  if (!ctx) {
+    throw std::runtime_error(getName() + " could not initialize PKEY_CTX");
+  }
+  EVP_PKEY* pk = nullptr;
+  if (EVP_PKEY_fromdata_init(ctx.get()) <= 0 || EVP_PKEY_fromdata(ctx.get(), &pk, EVP_PKEY_KEY_PARAMETERS, params.get()) <= 0) {
+    throw std::runtime_error(getName() + " fromdata failed");
+  }
+  if (!pk) {
+    throw std::runtime_error(getName() + " fromdata succeeded but pk is NULL");
+  }
+  d_pqckey = std::unique_ptr<EVP_PKEY, void (*)(EVP_PKEY*)>(pk, EVP_PKEY_free);
+}
+
+void OpenSSLPQCDNSCryptoKeyEngine::fromPublicKeyString(const std::string& content)
+{
+  if (content.length() != d_pub_len) {
+    throw runtime_error(getName() + " wrong public key length for algorithm " + std::to_string(d_algorithm));
+  }
+
+  const unsigned char* raw = reinterpret_cast<const unsigned char*>(content.c_str());
+
+  d_pqckey = std::unique_ptr<EVP_PKEY, void (*)(EVP_PKEY*)>(EVP_PKEY_new_raw_public_key_ex(nullptr, d_algname.c_str(), nullptr, raw, d_pub_len), EVP_PKEY_free);
+  if (!d_pqckey) {
+    throw runtime_error(getName() + " allocation of public key structure failed");
+  }
 }
 #endif
 

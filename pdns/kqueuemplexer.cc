@@ -166,7 +166,9 @@ void KqueueFDMultiplexer::getAvailableFDs(std::vector<int>& fds, int timeout)
 
 int KqueueFDMultiplexer::run(struct timeval* now, int timeout)
 {
-  InRun guard(d_inrun);
+  if (d_inrun) {
+    throw FDMultiplexerException("FDMultiplexer::run() is not reentrant!\n");
+  }
 
   struct timespec ts;
   ts.tv_sec = timeout / 1000;
@@ -184,6 +186,8 @@ int KqueueFDMultiplexer::run(struct timeval* now, int timeout)
     return 0;
   }
 
+  d_inrun = true;
+
   for (int n = 0; n < ret; ++n) {
     if (d_kevents[n].filter == EVFILT_READ) {
       const auto& iter = d_readCallbacks.find(d_kevents[n].ident);
@@ -200,6 +204,7 @@ int KqueueFDMultiplexer::run(struct timeval* now, int timeout)
     }
   }
 
+  d_inrun = false;
   return ret;
 }
 

@@ -71,7 +71,7 @@ public:
   {
   }
 
-  void release(bool removeFomCache)
+  void release()
   {
   }
 

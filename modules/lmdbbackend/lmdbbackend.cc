@@ -662,6 +662,8 @@ LMDBBackend::LMDBBackend(const std::string& suffix)
     d_asyncFlag = MDB_NOSYNC;
   else if (syncMode == "nometasync")
     d_asyncFlag = MDB_NOMETASYNC;
+  else if (syncMode == "mapasync")
+    d_asyncFlag = MDB_MAPASYNC;
   else if (syncMode.empty() || syncMode == "sync")
     d_asyncFlag = 0;
   else
@@ -2080,8 +2082,8 @@ bool LMDBBackend::getBeforeAndAfterNamesAbsolute(uint32_t id, const DNSName& qna
 
     for (;;) {
       if (co.getDomainID(key.getNoStripHeader<StringView>()) != id) {
-        //cout<<"Last record also not part of this zone!"<<endl;
-        // this implies something is wrong in the database, nothing we can do
+        // cout<<"Last record also not part of this zone!"<<endl;
+        //  this implies something is wrong in the database, nothing we can do
         return false;
       }
 
@@ -2178,8 +2180,8 @@ bool LMDBBackend::getBeforeAndAfterNamesAbsolute(uint32_t id, const DNSName& qna
 
         for (;;) {
           if (co.getDomainID(key.getNoStripHeader<StringView>()) != id) {
-            //cout<<"Last record also not part of this zone!"<<endl;
-            // this implies something is wrong in the database, nothing we can do
+            // cout<<"Last record also not part of this zone!"<<endl;
+            //  this implies something is wrong in the database, nothing we can do
             return false;
           }
 
@@ -2770,7 +2772,7 @@ public:
   void declareArguments(const string& suffix = "") override
   {
     declare(suffix, "filename", "Filename for lmdb", "./pdns.lmdb");
-    declare(suffix, "sync-mode", "Synchronisation mode: nosync, nometasync, sync", "sync");
+    declare(suffix, "sync-mode", "Synchronisation mode: nosync, nometasync, mapasync, sync", "mapasync");
     // there just is no room for more on 32 bit
     declare(suffix, "shards", "Records database will be split into this number of shards", (sizeof(void*) == 4) ? "2" : "64");
     declare(suffix, "schema-version", "Maximum allowed schema version to run on this DB. If a lower version is found, auto update is performed", std::to_string(SCHEMAVERSION));
@@ -2792,7 +2794,7 @@ class LMDBLoader
 public:
   LMDBLoader()
   {
-    BackendMakers().report(std::make_unique<LMDBFactory>());
+    BackendMakers().report(new LMDBFactory);
     g_log << Logger::Info << "[lmdbbackend] This is the lmdb backend version " VERSION
 #ifndef REPRODUCIBLE
           << " (" __DATE__ " " __TIME__ ")"

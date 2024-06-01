@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <string>
 
-#include "pdns/misc.hh"
 #include "pdns/namespaces.hh"
 
 class CoRemote
@@ -68,6 +67,6 @@ public:
 
 private:
   int d_fd;
-  pdns::UniqueFilePtr d_fp{nullptr};
+  std::unique_ptr<FILE, int (*)(FILE*)> d_fp{nullptr, fclose};
 };
 bool isUnixSocket(const string& fname);

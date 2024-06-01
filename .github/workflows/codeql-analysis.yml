@@ -156,7 +156,7 @@ jobs:
     - run: inv ci-install-rust ${{ env.REPO_HOME }}
       if: matrix.product == 'dnsdist'
       working-directory: ./pdns/dnsdistdist/
-    - run: inv ci-build-and-install-quiche ${{ env.REPO_HOME }}
+    - run: inv ci-build-and-install-quiche
       if: matrix.product == 'dnsdist'
       working-directory: ./pdns/dnsdistdist/
     - name: Configure dnsdist
@@ -212,7 +212,7 @@ jobs:
       if: matrix.product == 'rec'
       working-directory: ./pdns/recursordist/
       run: |
-        inv ci-rec-configure full
+        inv ci-rec-configure
     - name: Build rec
       if: matrix.product == 'rec'
       working-directory: ./pdns/recursordist/

@@ -137,8 +137,7 @@ TCPConnectionToBackend::~TCPConnectionToBackend()
   }
 }
 
-void TCPConnectionToBackend::release(bool removeFromCache)
-{
+void TCPConnectionToBackend::release(){
   d_ds->outstanding -= d_pendingResponses.size();
 
   d_pendingResponses.clear();
@@ -146,13 +145,6 @@ void TCPConnectionToBackend::release(bool removeFromCache)
 
   if (d_ioState) {
     d_ioState.reset();
-  }
-
-  if (removeFromCache && !willBeReusable(true)) {
-    auto shared = std::dynamic_pointer_cast<TCPConnectionToBackend>(shared_from_this());
-    /* remove ourselves from the connection cache, this might mean that our
-       reference count drops to zero after that, so we need to be careful */
-    t_downstreamTCPConnectionsManager.removeDownstreamConnection(shared);
   }
 }
 
@@ -372,7 +364,7 @@ void TCPConnectionToBackend::handleIO(std::shared_ptr<TCPConnectionToBackend>& c
           catch (const std::exception& e) {
             vinfolog("Got an exception while handling TCP response from %s (client is %s): %s", conn->d_ds ? conn->d_ds->getNameWithAddr() : "unknown", conn->d_currentQuery.d_query.d_idstate.origRemote.toStringWithPort(), e.what());
             ioGuard.release();
-            conn->release(true);
+            conn->release();
             return;
           }
         }
@@ -585,7 +577,7 @@ void TCPConnectionToBackend::handleTimeout(const struct timeval& now, bool write
     vinfolog("Got exception while notifying a timeout");
   }
 
-  release(true);
+  release();
 }
 
 void TCPConnectionToBackend::notifyAllQueriesFailed(const struct timeval& now, FailureReason reason)
@@ -616,7 +608,7 @@ void TCPConnectionToBackend::notifyAllQueriesFailed(const struct timeval& now, F
   try {
     if (d_state == State::sendingQueryToBackend) {
       increaseCounters(d_currentQuery.d_query.d_idstate.cs);
-      auto sender = std::move(d_currentQuery.d_sender);
+      auto sender = d_currentQuery.d_sender;
       if (sender->active()) {
         TCPResponse response(std::move(d_currentQuery.d_query));
         sender->notifyIOError(now, std::move(response));
@@ -625,7 +617,7 @@ void TCPConnectionToBackend::notifyAllQueriesFailed(const struct timeval& now, F
 
     for (auto& query : pendingQueries) {
       increaseCounters(query.d_query.d_idstate.cs);
-      auto sender = std::move(query.d_sender);
+      auto sender = query.d_sender;
       if (sender->active()) {
         TCPResponse response(std::move(query.d_query));
         sender->notifyIOError(now, std::move(response));
@@ -634,7 +626,7 @@ void TCPConnectionToBackend::notifyAllQueriesFailed(const struct timeval& now, F
 
     for (auto& response : pendingResponses) {
       increaseCounters(response.second.d_query.d_idstate.cs);
-      auto sender = std::move(response.second.d_sender);
+      auto sender = response.second.d_sender;
       if (sender->active()) {
         TCPResponse tresp(std::move(response.second.d_query));
         sender->notifyIOError(now, std::move(tresp));
@@ -648,7 +640,7 @@ void TCPConnectionToBackend::notifyAllQueriesFailed(const struct timeval& now, F
     vinfolog("Got exception while notifying");
   }
 
-  release(true);
+  release();
 }
 
 IOState TCPConnectionToBackend::handleResponse(std::shared_ptr<TCPConnectionToBackend>& conn, const struct timeval& now)
@@ -683,9 +675,9 @@ IOState TCPConnectionToBackend::handleResponse(std::shared_ptr<TCPConnectionToBa
     response.d_buffer = std::move(d_responseBuffer);
     response.d_connection = conn;
     response.d_ds = conn->d_ds;
-    const auto& queryIDS = it->second.d_query.d_idstate;
-    /* we don't move the whole IDS because we will need it for the responses to come */
-    response.d_idstate = queryIDS.partialCloneForXFR();
+    /* we don't move the whole IDS because we will need for the responses to come */
+    response.d_idstate.qtype = it->second.d_query.d_idstate.qtype;
+    response.d_idstate.qname = it->second.d_query.d_idstate.qname;
     DEBUGLOG("passing XFRresponse to client connection for "<<response.d_idstate.qname);
 
     it->second.d_query.d_xfrStarted = true;

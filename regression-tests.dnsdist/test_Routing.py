@@ -129,44 +129,8 @@ class TestRoutingQPSPoolRouting(DNSDistTest):
         (_, receivedResponse) = self.sendTCPQuery(query, response=None, useQueue=False)
         self.assertEqual(receivedResponse, None)
 
-class RoundRobinTest(object):
-    def doTestRR(self, name):
-        """
-        Routing: Round Robin
 
-        Send 10 A queries to the requested name,
-        check that dnsdist routes half of it to each backend.
-        """
-        numberOfQueries = 10
-        name = name
-        query = dns.message.make_query(name, 'A', 'IN')
-        response = dns.message.make_response(query)
-        rrset = dns.rrset.from_text(name,
-                                    60,
-                                    dns.rdataclass.IN,
-                                    dns.rdatatype.A,
-                                    '192.0.2.1')
-        response.answer.append(rrset)
-
-        # the round robin counter is shared for UDP and TCP,
-        # so we need to do UDP then TCP to have a clean count
-        for _ in range(numberOfQueries):
-            (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
-            receivedQuery.id = query.id
-            self.assertEqual(query, receivedQuery)
-            self.assertEqual(response, receivedResponse)
-
-        for _ in range(numberOfQueries):
-            (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response)
-            receivedQuery.id = query.id
-            self.assertEqual(query, receivedQuery)
-            self.assertEqual(response, receivedResponse)
-
-        for key in self._responsesCounter:
-            value = self._responsesCounter[key]
-            self.assertEqual(value, numberOfQueries / 2)
-
-class TestRoutingRoundRobinLB(RoundRobinTest, DNSDistTest):
+class TestRoutingRoundRobinLB(DNSDistTest):
 
     _testServer2Port = pickAvailablePort()
     _config_params = ['_testServerPort', '_testServer2Port']
@@ -203,46 +167,34 @@ class TestRoutingRoundRobinLB(RoundRobinTest, DNSDistTest):
         Send 10 A queries to "rr.routing.tests.powerdns.com.",
         check that dnsdist routes half of it to each backend.
         """
-        self.doTestRR('rr.routing.tests.powerdns.com.')
+        numberOfQueries = 10
+        name = 'rr.routing.tests.powerdns.com.'
+        query = dns.message.make_query(name, 'A', 'IN')
+        response = dns.message.make_response(query)
+        rrset = dns.rrset.from_text(name,
+                                    60,
+                                    dns.rdataclass.IN,
+                                    dns.rdatatype.A,
+                                    '192.0.2.1')
+        response.answer.append(rrset)
 
-class TestRoutingRoundRobinLBViaPool(RoundRobinTest, DNSDistTest):
+        # the round robin counter is shared for UDP and TCP,
+        # so we need to do UDP then TCP to have a clean count
+        for _ in range(numberOfQueries):
+            (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
+            receivedQuery.id = query.id
+            self.assertEqual(query, receivedQuery)
+            self.assertEqual(response, receivedResponse)
 
-    _testServer2Port = pickAvailablePort()
-    _config_params = ['_testServerPort', '_testServer2Port']
-    _config_template = """
-    s1 = newServer{address="127.0.0.1:%d"}
-    s1:setUp()
-    s2 = newServer{address="127.0.0.1:%d"}
-    s2:setUp()
-    setPoolServerPolicy(roundrobin, '')
-    """
+        for _ in range(numberOfQueries):
+            (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response)
+            receivedQuery.id = query.id
+            self.assertEqual(query, receivedQuery)
+            self.assertEqual(response, receivedResponse)
 
-    @classmethod
-    def startResponders(cls):
-        print("Launching responders..")
-        cls._UDPResponder = threading.Thread(name='UDP Responder', target=cls.UDPResponder, args=[cls._testServerPort, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._UDPResponder.daemon = True
-        cls._UDPResponder.start()
-        cls._UDPResponder2 = threading.Thread(name='UDP Responder 2', target=cls.UDPResponder, args=[cls._testServer2Port, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._UDPResponder2.daemon = True
-        cls._UDPResponder2.start()
-
-        cls._TCPResponder = threading.Thread(name='TCP Responder', target=cls.TCPResponder, args=[cls._testServerPort, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._TCPResponder.daemon = True
-        cls._TCPResponder.start()
-
-        cls._TCPResponder2 = threading.Thread(name='TCP Responder 2', target=cls.TCPResponder, args=[cls._testServer2Port, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._TCPResponder2.daemon = True
-        cls._TCPResponder2.start()
-
-    def testRR(self):
-        """
-        Routing: Round Robin (pool)
-
-        Send 10 A queries to "rr-pool.routing.tests.powerdns.com.",
-        check that dnsdist routes half of it to each backend.
-        """
-        self.doTestRR('rr-pool.routing.tests.powerdns.com.')
+        for key in self._responsesCounter:
+            value = self._responsesCounter[key]
+            self.assertEqual(value, numberOfQueries / 2)
 
 class TestRoutingRoundRobinLBOneDown(DNSDistTest):
 
@@ -329,7 +281,7 @@ class TestRoutingRoundRobinLBAllDown(DNSDistTest):
             (_, receivedResponse) = sender(query, response=None, useQueue=False)
             self.assertEqual(receivedResponse, None)
 
-class TestRoutingLuaFFIPerThreadRoundRobinLB(RoundRobinTest, DNSDistTest):
+class TestRoutingLuaFFIPerThreadRoundRobinLB(DNSDistTest):
 
     _testServer2Port = pickAvailablePort()
     _config_params = ['_testServerPort', '_testServer2Port']
@@ -352,11 +304,6 @@ class TestRoutingLuaFFIPerThreadRoundRobinLB(RoundRobinTest, DNSDistTest):
     s1:setUp()
     s2 = newServer{address="127.0.0.1:%s"}
     s2:setUp()
-
-    function atExit()
-      setServerPolicy(leastOutstanding)
-      collectgarbage()
-    end
     """
 
     @classmethod
@@ -379,55 +326,39 @@ class TestRoutingLuaFFIPerThreadRoundRobinLB(RoundRobinTest, DNSDistTest):
 
     def testRR(self):
         """
-        Routing: Round Robin (LuaFFI)
+        Routing: Round Robin
+
+        Send 10 A queries to "rr.routing.tests.powerdns.com.",
+        check that dnsdist routes half of it to each backend.
         """
-        self.doTestRR('rr-luaffi.routing.tests.powerdns.com.')
+        numberOfQueries = 10
+        name = 'rr.routing.tests.powerdns.com.'
+        query = dns.message.make_query(name, 'A', 'IN')
+        response = dns.message.make_response(query)
+        rrset = dns.rrset.from_text(name,
+                                    60,
+                                    dns.rdataclass.IN,
+                                    dns.rdatatype.A,
+                                    '192.0.2.1')
+        response.answer.append(rrset)
 
-class TestRoutingCustomLuaRoundRobinLB(RoundRobinTest, DNSDistTest):
+        # the round robin counter is shared for UDP and TCP,
+        # so we need to do UDP then TCP to have a clean count
+        for _ in range(numberOfQueries):
+            (receivedQuery, receivedResponse) = self.sendUDPQuery(query, response)
+            receivedQuery.id = query.id
+            self.assertEqual(query, receivedQuery)
+            self.assertEqual(response, receivedResponse)
 
-    _testServer2Port = pickAvailablePort()
-    _config_params = ['_testServerPort', '_testServer2Port']
-    _config_template = """
-    -- otherwise we start too many TCP workers, and as each thread
-    -- uses it own counter this makes the TCP queries distribution hard to predict
-    setMaxTCPClientThreads(1)
+        for _ in range(numberOfQueries):
+            (receivedQuery, receivedResponse) = self.sendTCPQuery(query, response)
+            receivedQuery.id = query.id
+            self.assertEqual(query, receivedQuery)
+            self.assertEqual(response, receivedResponse)
 
-    local counter = 0
-    function luaroundrobin(servers_list, dq)
-      counter = counter + 1
-      return servers_list[(counter %% #servers_list)+1]
-    end
-    setServerPolicy(newServerPolicy("custom lua round robin policy", luaroundrobin))
-
-    s1 = newServer{address="127.0.0.1:%s"}
-    s1:setUp()
-    s2 = newServer{address="127.0.0.1:%s"}
-    s2:setUp()
-    """
-
-    @classmethod
-    def startResponders(cls):
-        print("Launching responders..")
-        cls._UDPResponder = threading.Thread(name='UDP Responder', target=cls.UDPResponder, args=[cls._testServerPort, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._UDPResponder.daemon = True
-        cls._UDPResponder.start()
-        cls._UDPResponder2 = threading.Thread(name='UDP Responder 2', target=cls.UDPResponder, args=[cls._testServer2Port, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._UDPResponder2.daemon = True
-        cls._UDPResponder2.start()
-
-        cls._TCPResponder = threading.Thread(name='TCP Responder', target=cls.TCPResponder, args=[cls._testServerPort, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._TCPResponder.daemon = True
-        cls._TCPResponder.start()
-
-        cls._TCPResponder2 = threading.Thread(name='TCP Responder 2', target=cls.TCPResponder, args=[cls._testServer2Port, cls._toResponderQueue, cls._fromResponderQueue])
-        cls._TCPResponder2.daemon = True
-        cls._TCPResponder2.start()
-
-    def testRR(self):
-        """
-        Routing: Round Robin (Lua)
-        """
-        self.doTestRR('rr-lua.routing.tests.powerdns.com.')
+        for key in self._responsesCounter:
+            value = self._responsesCounter[key]
+            self.assertEqual(value, numberOfQueries / 2)
 
 class TestRoutingOrder(DNSDistTest):
 
@@ -804,37 +735,3 @@ class TestRoutingHighValueWRandom(DNSDistTest):
             self.assertEqual(self._responsesCounter['UDP Responder 2'], numberOfQueries - self._responsesCounter['UDP Responder'])
         if 'TCP Responder 2' in self._responsesCounter:
             self.assertEqual(self._responsesCounter['TCP Responder 2'], numberOfQueries - self._responsesCounter['TCP Responder'])
-
-class TestRoutingLuaFFILBNoServer(DNSDistTest):
-
-    _config_template = """
-    -- we want a ServFail answer when all servers are down
-    setServFailWhenNoServer(true)
-
-    local ffi = require("ffi")
-    local C = ffi.C
-    function luaffipolicy(servers_list, dq)
-      -- return a large value, outside of the number of servers, to indicate that
-      -- no server is available
-      return tonumber(C.dnsdist_ffi_servers_list_get_count(servers_list)) + 100
-    end
-    setServerPolicyLuaFFI("luaffipolicy", luaffipolicy)
-
-    s1 = newServer{address="127.0.0.1:%s"}
-    s1:setDown()
-    """
-    _verboseMode = True
-
-    def testOurPolicy(self):
-        """
-        Routing: LuaFFI policy, all servers are down
-        """
-        name = 'lua-ffi-no-servers.routing.tests.powerdns.com.'
-        query = dns.message.make_query(name, 'A', 'IN')
-        expectedResponse = dns.message.make_response(query)
-        expectedResponse.set_rcode(dns.rcode.SERVFAIL)
-
-        for method in ("sendUDPQuery", "sendTCPQuery"):
-            sender = getattr(self, method)
-            (_, receivedResponse) = sender(query, response=None, useQueue=False)
-            self.assertEqual(expectedResponse, receivedResponse)

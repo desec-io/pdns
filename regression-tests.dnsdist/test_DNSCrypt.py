@@ -332,7 +332,7 @@ class TestDNSCryptAutomaticRotation(DNSCryptTest):
 
     local last = 0
     serial = %d
-    function reloadCallback()
+    function maintenance()
       local now = os.time()
       if ((now - last) > 2) then
         serial = serial + 1
@@ -340,7 +340,6 @@ class TestDNSCryptAutomaticRotation(DNSCryptTest):
         last = now
       end
     end
-    addMaintenanceCallback(reloadCallback)
     """
 
     _config_params = ['_consoleKeyB64', '_consolePort', '_resolverCertificateSerial', '_resolverCertificateValidFrom', '_resolverCertificateValidUntil', '_dnsDistPortDNSCrypt', '_providerName', '_testServerPort', '_resolverCertificateSerial']

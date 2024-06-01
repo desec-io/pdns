@@ -33,7 +33,7 @@ public:
          string msocket = "", string user = "",
          string password = "", string group = "",
          bool setIsolation = false, unsigned int timeout = 10,
-         bool threadCleanup = false);
+         bool threadCleanup = false, bool clientSSL = false);
 
   ~SMySQL() override;
 
@@ -64,4 +64,5 @@ private:
   uint16_t d_port;
   bool d_setIsolation;
   bool d_threadCleanup;
+  bool d_clientSSL;
 };

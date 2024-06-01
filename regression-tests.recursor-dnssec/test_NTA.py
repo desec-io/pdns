@@ -1,7 +1,7 @@
 import dns
 from recursortests import RecursorTest
 
-class testNTA(RecursorTest):
+class testSimple(RecursorTest):
     _confdir = 'NTA'
 
     _config_template = """dnssec=validate"""

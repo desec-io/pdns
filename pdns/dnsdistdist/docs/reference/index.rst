@@ -6,7 +6,6 @@ These chapters contain extensive information on all functions and object availab
 .. toctree::
   :maxdepth: 3
 
-  actions
   config
   constants
   comboaddress
@@ -26,8 +25,6 @@ These chapters contain extensive information on all functions and object availab
   kvs
   logging
   web
-  rules-management
-  selectors
   svc
   custommetrics
   xsk

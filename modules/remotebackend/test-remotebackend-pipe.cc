@@ -73,10 +73,10 @@ struct RemotebackendSetup
     try {
       // setup minimum arguments
       ::arg().set("module-dir") = "./.libs";
-      auto loader = std::make_unique<RemoteLoader>();
+      new RemoteLoader();
       BackendMakers().launch("remote");
       // then get us a instance of it
-      ::arg().set("remote-connection-string") = "pipe:command=unittest_pipe.py";
+      ::arg().set("remote-connection-string") = "pipe:command=unittest_pipe.rb";
       ::arg().set("remote-dnssec") = "yes";
       backendUnderTest = std::move(BackendMakers().all()[0]);
       // load few record types to help out

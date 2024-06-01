@@ -96,8 +96,6 @@ enum class Counter : uint8_t
   maintenanceCalls,
   nodCount,
   udrCount,
-  maxChainLength,
-  maxChainWeight,
 
   numberOfCounters
 };

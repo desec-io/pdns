@@ -402,6 +402,9 @@ to enable DNSSEC. Must be one of:
 * ecdsa384 (ECDSA P-384 with SHA384)
 * ed25519
 * ed448
+* falcon512
+* dilithium2
+* sphincs+-sha256-128s
 
 .. note::
   Actual supported algorithms depend on the crypto-libraries
@@ -534,6 +537,9 @@ to enable DNSSEC. Must be one of:
 * ecdsa384 (ECDSA P-384 with SHA384)
 * ed25519
 * ed448
+* falcon512
+* dilithium2
+* sphincs+-sha256-128s
 
 .. note::
   Actual supported algorithms depend on the crypto-libraries
@@ -601,7 +607,7 @@ regression testing.
 -  Boolean
 -  Default: no
 
-Do not log to syslog, only to stderr. Use this setting when running
+Do not log to syslog, only to stdout. Use this setting when running
 inside a supervisor that handles logging (like systemd).
 
 .. warning::
@@ -653,18 +659,6 @@ caching.
 -  Default: no
 
 Enable/Disable DNS update (RFC2136) support. See :doc:`dnsupdate` for more.
-
-.. _setting-dnsupdate-require-tsig:
-
-``dnsupdate-require-tsig``
---------------------------
-
-.. versionadded:: 5.0.0
-
--  Boolean
--  Default: no
-
-Requires DNS updates to be signed by a valid TSIG signature even if the zone has no associated keys.
 
 .. _setting-do-ipv6-additional-processing:
 
@@ -973,7 +967,7 @@ to at least 5 to see the logs.
 - Bool
 - Default: yes
 
-When printing log lines to stderr, prefix them with timestamps.
+When printing log lines to stdout, prefix them with timestamps.
 Disable this if the process supervisor timestamps these lines already.
 
 .. note::
@@ -1022,30 +1016,6 @@ When enabled, log messages are formatted like structured logs, including their l
 
 Script to be used to edit incoming AXFRs, see :ref:`modes-of-operation-axfrfilter`
 
-.. _setting-lua-consistent-hashes-cleanup-interval:
-
-``lua-consistent-hashes-cleanup-interval``
-------------------------------------------
-
--  Integer
--  Default: 3600
-
-.. versionadded:: 4.9.0
-
-Amount of time (in seconds) between subsequent cleanup routines for pre-computed hashes related to :func:`pickchashed()`.
-
-.. _setting-lua-consistent-hashes-expire-delay:
-
-``lua-consistent-hashes-expire-delay``
---------------------------------------
-
--  Integer
--  Default: 86400
-
-.. versionadded:: 4.9.0
-
-Amount of time (in seconds) a pre-computed hash entry will be considered as expired when unused. See :func:`pickchashed()`.
-
 .. _setting-lua-health-checks-expire-delay:
 
 ``lua-health-checks-expire-delay``
@@ -1086,25 +1056,13 @@ guaranteed to be stable, and is in fact likely to change.
 .. _setting-lua-records-exec-limit:
 
 ``lua-records-exec-limit``
---------------------------
+-----------------------------
 
 -  Integer
 -  Default: 1000
 
 Limit LUA records scripts to ``lua-records-exec-limit`` instructions.
 Setting this to any value less than or equal to 0 will set no limit.
-
-.. _setting-lua-records-insert-whitespace:
-
-``lua-records-insert-whitespace``
----------------------------------
-
-- Boolean
-- Default: no in 5.0, yes before that
-
-.. versionadded:: 4.9.1
-
-When combining the ``"`` delimited chunks of a LUA record, whether to insert whitespace between each chunk.
 
 .. _setting-master:
 
@@ -1393,8 +1351,7 @@ Secondary name servers.
 -  Default: 0 (disabled)
 
 If this many packets are waiting for database attention, answer any new
-questions strictly from the packet cache. Packets not in the cache will
-be dropped, and :ref:`_stat-overload-drops` will be incremented.
+questions strictly from the packet cache.
 
 .. _setting-prevent-self-notification:
 

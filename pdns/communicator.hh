@@ -78,11 +78,7 @@ public:
   void add(const DNSName& domain, const string& ipstring, time_t delay = 0)
   {
     const ComboAddress ipaddress(ipstring);
-    add(domain, ipaddress, delay);
-  }
 
-  void add(const DNSName& domain, const ComboAddress& ipaddress, time_t delay = 0)
-  {
     NotificationRequest nr;
     nr.domain = domain;
     nr.ip = ipaddress.toStringWithPort();

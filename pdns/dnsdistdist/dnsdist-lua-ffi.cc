@@ -209,6 +209,11 @@ bool dnsdist_ffi_dnsquestion_get_use_ecs(const dnsdist_ffi_dnsquestion_t* dq)
   return dq->dq->useECS;
 }
 
+bool dnsdist_ffi_dnsquestion_get_add_xpf(const dnsdist_ffi_dnsquestion_t* dq)
+{
+  return dq->dq->addXPF;
+}
+
 bool dnsdist_ffi_dnsquestion_get_ecs_override(const dnsdist_ffi_dnsquestion_t* dq)
 {
   return dq->dq->ecsOverride;
@@ -1816,7 +1821,7 @@ uint16_t dnsdist_ffi_network_message_get_endpoint_id(const dnsdist_ffi_network_m
 }
 
 #ifndef DISABLE_DYNBLOCKS
-bool dnsdist_ffi_dynamic_blocks_add(const char* address, const char* message, uint8_t action, unsigned int duration, uint8_t clientIPMask, uint8_t clientIPPortMask, const char* tagKey, const char* tagValue)
+bool dnsdist_ffi_dynamic_blocks_add(const char* address, const char* message, uint8_t action, unsigned int duration, uint8_t clientIPMask, uint8_t clientIPPortMask)
 {
   try {
     ComboAddress clientIPCA;
@@ -1834,20 +1839,12 @@ bool dnsdist_ffi_dynamic_blocks_add(const char* address, const char* message, ui
 
     AddressAndPortRange target(clientIPCA, clientIPMask, clientIPPortMask);
 
-    timespec now{};
+    struct timespec now
+    {
+    };
     gettime(&now);
-    timespec until{now};
-    until.tv_sec += duration;
-    DynBlock dblock{message, until, DNSName(), static_cast<DNSAction::Action>(action)};
     auto slow = g_dynblockNMG.getCopy();
-    if (dblock.action == DNSAction::Action::SetTag && tagKey != nullptr) {
-      dblock.tagSettings = std::make_shared<DynBlock::TagSettings>();
-      dblock.tagSettings->d_name = tagKey;
-      if (tagValue != nullptr) {
-        dblock.tagSettings->d_value = tagValue;
-      }
-    }
-    if (dnsdist::DynamicBlocks::addOrRefreshBlock(slow, now, target, std::move(dblock), false)) {
+    if (dnsdist::DynamicBlocks::addOrRefreshBlock(slow, now, target, message, duration, static_cast<DNSAction::Action>(action), false, false)) {
       g_dynblockNMG.setState(slow);
       return true;
     }
@@ -1864,7 +1861,7 @@ bool dnsdist_ffi_dynamic_blocks_add(const char* address, const char* message, ui
   return false;
 }
 
-bool dnsdist_ffi_dynamic_blocks_smt_add(const char* suffix, const char* message, uint8_t action, unsigned int duration, const char* tagKey, const char* tagValue)
+bool dnsdist_ffi_dynamic_blocks_smt_add(const char* suffix, const char* message, uint8_t action, unsigned int duration)
 {
   try {
     DNSName domain;
@@ -1881,20 +1878,12 @@ bool dnsdist_ffi_dynamic_blocks_smt_add(const char* suffix, const char* message,
       return false;
     }
 
-    timespec now{};
+    struct timespec now
+    {
+    };
     gettime(&now);
-    timespec until{now};
-    until.tv_sec += duration;
-    DynBlock dblock{message, until, domain, static_cast<DNSAction::Action>(action)};
     auto slow = g_dynblockSMT.getCopy();
-    if (dblock.action == DNSAction::Action::SetTag && tagKey != nullptr) {
-      dblock.tagSettings = std::make_shared<DynBlock::TagSettings>();
-      dblock.tagSettings->d_name = tagKey;
-      if (tagValue != nullptr) {
-        dblock.tagSettings->d_value = tagValue;
-      }
-    }
-    if (dnsdist::DynamicBlocks::addOrRefreshBlockSMT(slow, now, std::move(dblock), false)) {
+    if (dnsdist::DynamicBlocks::addOrRefreshBlockSMT(slow, now, domain, message, duration, static_cast<DNSAction::Action>(action), false)) {
       g_dynblockSMT.setState(slow);
       return true;
     }

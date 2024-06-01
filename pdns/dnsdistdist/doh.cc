@@ -11,6 +11,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <h2o.h>
+//#include <h2o/http1.h>
 #include <h2o/http2.h>
 
 #include <openssl/err.h>
@@ -30,6 +31,7 @@
 #include "dnsdist-metrics.hh"
 #include "dnsdist-proxy-protocol.hh"
 #include "dnsdist-rules.hh"
+#include "dnsdist-xpf.hh"
 #include "libssl.hh"
 #include "threadname.hh"
 
@@ -158,8 +160,7 @@ public:
 
   std::map<int, std::string> d_ocspResponses;
   std::unique_ptr<OpenSSLTLSTicketKeysRing> d_ticketKeys{nullptr};
-  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-  pdns::UniqueFilePtr d_keyLogFile{nullptr};
+  std::unique_ptr<FILE, int(*)(FILE*)> d_keyLogFile{nullptr, fclose};
   ClientState* d_cs{nullptr};
   time_t d_ticketsKeyRotationDelay{0};
 
@@ -211,7 +212,6 @@ struct DOHServerConfig
   std::set<std::string, std::less<>> paths;
   h2o_globalconf_t h2o_config{};
   h2o_context_t h2o_ctx{};
-  std::unique_ptr<h2o_socket_t,decltype(&h2o_socket_close)> h2o_socket{nullptr, h2o_socket_close};
   std::shared_ptr<DOHAcceptContext> accept_ctx{nullptr};
   ClientState* clientState{nullptr};
   std::shared_ptr<DOHFrontend> dohFrontend{nullptr};
@@ -503,8 +503,8 @@ public:
     memcpy(&cleartextDH, dr.getHeader().get(), sizeof(cleartextDH));
 
     if (!response.isAsync()) {
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::ResponseRules).getLocal();
-      static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localCacheInsertedRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::CacheInsertedResponseRules).getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localRespRuleActions = g_respruleactions.getLocal();
+      static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localCacheInsertedRespRuleActions = g_cacheInsertedRespRuleActions.getLocal();
 
       dr.ids.du = std::move(dohUnit);
 
@@ -1430,9 +1430,9 @@ static void on_accept(h2o_socket_t *listener, const char *err)
 
 static int create_listener(std::shared_ptr<DOHServerConfig>& dsc, int descriptor)
 {
-  dsc->h2o_socket = std::unique_ptr<h2o_socket_t, decltype(&h2o_socket_close)>{h2o_evloop_socket_create(dsc->h2o_ctx.loop, descriptor, H2O_SOCKET_FLAG_DONT_READ), &h2o_socket_close};
-  dsc->h2o_socket->data = dsc.get();
-  h2o_socket_read_start(dsc->h2o_socket.get(), on_accept);
+  auto* sock = h2o_evloop_socket_create(dsc->h2o_ctx.loop, descriptor, H2O_SOCKET_FLAG_DONT_READ);
+  sock->data = dsc.get();
+  h2o_socket_read_start(sock, on_accept);
 
   return 0;
 }
@@ -1599,11 +1599,11 @@ void dohThread(ClientState* clientState)
     dsc->h2o_ctx.storage.entries[0].data = dsc.get();
     ++dsc->h2o_ctx.storage.size;
 
-    auto sock = std::unique_ptr<h2o_socket_t, decltype(&h2o_socket_close)>{h2o_evloop_socket_create(dsc->h2o_ctx.loop, dsc->d_responseReceiver.getDescriptor(), H2O_SOCKET_FLAG_DONT_READ), &h2o_socket_close};
+    auto* sock = h2o_evloop_socket_create(dsc->h2o_ctx.loop, dsc->d_responseReceiver.getDescriptor(), H2O_SOCKET_FLAG_DONT_READ);
     sock->data = dsc.get();
 
     // this listens to responses from dnsdist to turn into http responses
-    h2o_socket_read_start(sock.get(), on_dnsdist);
+    h2o_socket_read_start(sock, on_dnsdist);
 
     setupAcceptContext(*dsc->accept_ctx, *dsc, false);
 
@@ -1628,7 +1628,6 @@ void dohThread(ClientState* clientState)
     }
     while (!stop);
 
-    h2o_evloop_destroy(dsc->h2o_ctx.loop);
   }
   catch (const std::exception& e) {
     throw runtime_error("DOH thread failed to launch: " + std::string(e.what()));
@@ -1650,8 +1649,8 @@ void DOHUnit::handleUDPResponse(PacketBuffer&& udpResponse, InternalQueryState&&
     }
   }
   if (!dohUnit->truncated) {
-    static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::ResponseRules).getLocal();
-    static thread_local LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localCacheInsertedRespRuleActions = dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::CacheInsertedResponseRules).getLocal();
+    static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localRespRuleActions = g_respruleactions.getLocal();
+    static thread_local LocalStateHolder<vector<DNSDistResponseRuleAction>> localCacheInsertedRespRuleActions = g_cacheInsertedRespRuleActions.getLocal();
 
     DNSResponse dnsResponse(dohUnit->ids, udpResponse, dohUnit->downstream);
     dnsheader cleartextDH{};

@@ -54,7 +54,6 @@ ASEP
 Ashish
 associateddomain
 asyncresolve
-ATHENE
 Atlassian
 Atomia
 aton
@@ -258,7 +257,6 @@ Davids
 Dayneko
 dbfile
 dblfilename
-dblookup
 dbpf
 dbr
 dcobject
@@ -286,6 +284,7 @@ DHCID
 dhcpd
 dhcpdupdate
 diffs
+dilithium
 DIGESTALGOS
 Digitalus
 dijk
@@ -523,7 +522,6 @@ headfont
 headlinkcolor
 headtextcolor
 healthcheck
-Heftrig
 Heimhilcher
 Helbekkmo
 Hendriks
@@ -871,7 +869,6 @@ Neuf
 newcontent
 nftables
 nic
-Niklas
 Nilsen
 nimber
 Nixu
@@ -924,7 +921,6 @@ Nuitari
 NULs
 NUMA
 numreceived
-nvd
 nxd
 NXDATA
 nxdomain
@@ -1008,10 +1004,8 @@ pgp
 pgpsql
 phishing
 phonedph
-pickchashed
 pickclosest
 pickhashed
-picknamehashed
 pickrandom
 pickrandomsample
 pickwhashed
@@ -1089,7 +1083,6 @@ querycount
 querytime
 qytpe
 ragel
-Rak
 randombackend
 randombit
 randombytes
@@ -1194,7 +1187,6 @@ Schlich
 Scholten
 Schryver
 Schueler
-Schulmann
 schwer
 scopebits
 scopemask
@@ -1255,7 +1247,6 @@ slapindex
 slaveness
 SLES
 smartcard
-Smeenk
 smellyspice
 smimea
 smn
@@ -1282,6 +1273,7 @@ Spaans
 Spackages
 spams
 SPHINXBUILD
+sphincs
 sphinxcontrib
 sphinxjsondomain
 SPHINXOPTS
@@ -1319,7 +1311,6 @@ Storesund
 stou
 strcasestr
 stringmatch
-structuredlogging
 stubquery
 stubresolver
 Stussy
@@ -1399,7 +1390,6 @@ Toshifumi
 Travaille
 tribool
 trustanchor
-trustanchorfile
 trusteer
 trx
 trxid
@@ -1479,7 +1469,6 @@ Volker
 voxel
 Vranken
 vulns
-Waidner
 WAITFORONE
 wal
 wallclock
@@ -1530,7 +1519,6 @@ xdp
 Xek
 Xeon
 XForwarded
-XFR
 Xiang
 xorbooter
 xpf
@@ -1568,7 +1556,6 @@ zonemd
 zonemetadata
 zonename
 zoneparser
-zonetocaches
 zonetransfer
 Zonneveld
 zsk

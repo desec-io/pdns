@@ -38,25 +38,8 @@
 #include "rec-taskqueue.hh"
 #include "rec-tcpout.hh"
 #include "rec-main.hh"
-#include "rec-system-resolve.hh"
 
 #include "settings/cxxsettings.hh"
-
-/* g++ defines __SANITIZE_THREAD__
-   clang++ supports the nice __has_feature(thread_sanitizer),
-   let's merge them */
-#if defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-#define __SANITIZE_THREAD__ 1
-#endif
-#if __has_feature(address_sanitizer)
-#define __SANITIZE_ADDRESS__ 1
-#endif
-#endif
-
-#if defined(__SANITIZE_ADDRESS__) && defined(HAVE_LEAK_SANITIZER_INTERFACE)
-#include <sanitizer/lsan_interface.h>
-#endif
 
 std::pair<std::string, std::string> PrefixDashNumberCompare::prefixAndTrailingNum(const std::string& a)
 {
@@ -343,15 +326,15 @@ static uint64_t dumpAggressiveNSECCache(int fd)
   if (newfd == -1) {
     return 0;
   }
-  auto filePtr = pdns::UniqueFilePtr(fdopen(newfd, "w"));
-  if (!filePtr) {
+  auto fp = std::unique_ptr<FILE, int (*)(FILE*)>(fdopen(newfd, "w"), fclose);
+  if (!fp) {
     return 0;
   }
-  fprintf(filePtr.get(), "; aggressive NSEC cache dump follows\n;\n");
+  fprintf(fp.get(), "; aggressive NSEC cache dump follows\n;\n");
 
   struct timeval now;
   Utility::gettimeofday(&now, nullptr);
-  return g_aggressiveNSECCache->dumpToFile(filePtr, now);
+  return g_aggressiveNSECCache->dumpToFile(fp, now);
 }
 
 static uint64_t* pleaseDumpEDNSMap(int fd)
@@ -497,13 +480,13 @@ static RecursorControlChannel::Answer doDumpRPZ(int s, T begin, T end)
     return {1, "No RPZ zone named " + zoneName + "\n"};
   }
 
-  auto filePtr = pdns::UniqueFilePtr(fdopen(fdw, "w"));
-  if (!filePtr) {
+  auto fp = std::unique_ptr<FILE, int (*)(FILE*)>(fdopen(fdw, "w"), fclose);
+  if (!fp) {
     int err = errno;
     return {1, "converting file descriptor: " + stringerror(err) + "\n"};
   }
 
-  zone->dump(filePtr.get());
+  zone->dump(fp.get());
 
   return {0, "done\n"};
 }
@@ -1566,9 +1549,6 @@ static void registerAllStats1()
   addGetStat("nod-events", [] { return g_Counters.sum(rec::Counter::nodCount); });
   addGetStat("udr-events", [] { return g_Counters.sum(rec::Counter::udrCount); });
 
-  addGetStat("max-chain-length", [] { return g_Counters.max(rec::Counter::maxChainLength); });
-  addGetStat("max-chain-weight", [] { return g_Counters.max(rec::Counter::maxChainWeight); });
-
   /* make sure that the ECS stats are properly initialized */
   SyncRes::clearECSStats();
   for (size_t idx = 0; idx < SyncRes::s_ecsResponsesBySubnetSize4.size(); idx++) {
@@ -1611,18 +1591,8 @@ void registerAllStats()
   }
 }
 
-static auto clearLuaScript()
-{
-  vector<string> empty;
-  empty.emplace_back();
-  return doQueueReloadLuaScript(empty.begin(), empty.end());
-}
-
 void doExitGeneric(bool nicely)
 {
-#if defined(__SANITIZE_THREAD__)
-  _exit(0); // regression test check for exit 0
-#endif
   g_log << Logger::Error << "Exiting on user request" << endl;
   g_rcc.~RecursorControlChannel();
 
@@ -1634,15 +1604,8 @@ void doExitGeneric(bool nicely)
     RecursorControlChannel::stop = true;
   }
   else {
-#if defined(__SANITIZE_ADDRESS__) && defined(HAVE_LEAK_SANITIZER_INTERFACE)
-    clearLuaScript();
     pdns::coverage::dumpCoverageData();
-    __lsan_do_leak_check();
-    _exit(0); // let the regression test distinguish between leaks and no leaks as __lsan_do_leak_check() exits 1 on leaks
-#else
-    pdns::coverage::dumpCoverageData();
-    _exit(1); // for historic reasons we exit 1
-#endif
+    _exit(1);
   }
 }
 
@@ -2167,84 +2130,27 @@ static RecursorControlChannel::Answer help()
           "wipe-cache-typed type domain0 [domain1] ..  wipe domain data with qtype from cache\n"};
 }
 
-RecursorControlChannel::Answer luaconfig(bool broadcast)
-{
-  ProxyMapping proxyMapping;
-  LuaConfigItems lci;
-  lci.d_slog = g_slog;
-  extern std::unique_ptr<ProxyMapping> g_proxyMapping;
-  if (!g_luaSettingsInYAML) {
-    try {
-      loadRecursorLuaConfig(::arg()["lua-config-file"], proxyMapping, lci);
-      activateLuaConfig(lci);
-      lci = g_luaconfs.getCopy();
-      if (broadcast) {
-        startLuaConfigDelayedThreads(lci.rpzs, lci.generation);
-        broadcastFunction([=] { return pleaseSupplantProxyMapping(proxyMapping); });
-      }
-      else {
-        // Initial proxy mapping
-        g_proxyMapping = proxyMapping.empty() ? nullptr : std::make_unique<ProxyMapping>(proxyMapping);
-      }
-      if (broadcast) {
-        SLOG(g_log << Logger::Notice << "Reloaded Lua configuration file '" << ::arg()["lua-config-file"] << "', requested via control channel" << endl,
-             g_slog->withName("config")->info(Logr::Info, "Reloaded"));
-      }
-      return {0, "Reloaded Lua configuration file '" + ::arg()["lua-config-file"] + "'\n"};
-    }
-    catch (std::exception& e) {
-      return {1, "Unable to load Lua script from '" + ::arg()["lua-config-file"] + "': " + e.what() + "\n"};
-    }
-    catch (const PDNSException& e) {
-      return {1, "Unable to load Lua script from '" + ::arg()["lua-config-file"] + "': " + e.reason + "\n"};
-    }
-  }
-  try {
-    string configname = ::arg()["config-dir"] + "/recursor";
-    if (!::arg()["config-name"].empty()) {
-      configname = ::arg()["config-dir"] + "/recursor-" + ::arg()["config-name"];
-    }
-    bool dummy1{};
-    bool dummy2{};
-    pdns::rust::settings::rec::Recursorsettings settings;
-    auto yamlstat = pdns::settings::rec::tryReadYAML(configname + ".yml", false, dummy1, dummy2, settings, g_slog);
-    if (yamlstat != pdns::settings::rec::YamlSettingsStatus::OK) {
-      return {1, "Not reloading dynamic part of YAML configuration\n"};
-    }
-    auto generation = g_luaconfs.getLocal()->generation;
-    lci.generation = generation + 1;
-    pdns::settings::rec::fromBridgeStructToLuaConfig(settings, lci, proxyMapping);
-    activateLuaConfig(lci);
-    lci = g_luaconfs.getCopy();
-    if (broadcast) {
-      startLuaConfigDelayedThreads(lci.rpzs, lci.generation);
-      broadcastFunction([pmap = std::move(proxyMapping)] { return pleaseSupplantProxyMapping(pmap); });
-    }
-    else {
-      // Initial proxy mapping
-      g_proxyMapping = proxyMapping.empty() ? nullptr : std::make_unique<ProxyMapping>(proxyMapping);
-    }
-
-    return {0, "Reloaded dynamic part of YAML configuration\n"};
-  }
-  catch (std::exception& e) {
-    return {1, "Unable to reload dynamic YAML changes: " + std::string(e.what()) + "\n"};
-  }
-  catch (const PDNSException& e) {
-    return {1, "Unable to reload dynamic YAML changes: " + e.reason + "\n"};
-  }
-}
-
 template <typename T>
 static RecursorControlChannel::Answer luaconfig(T begin, T end)
 {
   if (begin != end) {
-    if (g_luaSettingsInYAML) {
-      return {1, "Unable to reload Lua script from '" + ::arg()["lua-config-file"] + " as there is no active Lua configuration\n"};
-    }
     ::arg().set("lua-config-file") = *begin;
   }
-  return luaconfig(true);
+  try {
+    luaConfigDelayedThreads delayedLuaThreads;
+    ProxyMapping proxyMapping;
+    loadRecursorLuaConfig(::arg()["lua-config-file"], delayedLuaThreads, proxyMapping);
+    startLuaConfigDelayedThreads(delayedLuaThreads, g_luaconfs.getCopy().generation);
+    broadcastFunction([=] { return pleaseSupplantProxyMapping(proxyMapping); });
+    g_log << Logger::Warning << "Reloaded Lua configuration file '" << ::arg()["lua-config-file"] << "', requested via control channel" << endl;
+    return {0, "Reloaded Lua configuration file '" + ::arg()["lua-config-file"] + "'\n"};
+  }
+  catch (std::exception& e) {
+    return {1, "Unable to load Lua script from '" + ::arg()["lua-config-file"] + "': " + e.what() + "\n"};
+  }
+  catch (const PDNSException& e) {
+    return {1, "Unable to load Lua script from '" + ::arg()["lua-config-file"] + "': " + e.reason + "\n"};
+  }
 }
 
 static RecursorControlChannel::Answer reloadACLs()
@@ -2266,16 +2172,6 @@ static RecursorControlChannel::Answer reloadACLs()
     return {1, ae.reason + string("\n")};
   }
   return {0, "ok\n"};
-}
-
-static std::string reloadZoneConfigurationWithSysResolveReset()
-{
-  auto& sysResolver = pdns::RecResolve::getInstance();
-  sysResolver.stopRefresher();
-  sysResolver.wipe();
-  auto ret = reloadZoneConfiguration(g_yamlSettings);
-  sysResolver.startRefresher();
-  return ret;
 }
 
 RecursorControlChannel::Answer RecursorControlParser::getAnswer(int socket, const string& question, RecursorControlParser::func_t** command)
@@ -2370,7 +2266,9 @@ RecursorControlChannel::Answer RecursorControlParser::getAnswer(int socket, cons
     return {0, doTraceRegex(begin == end ? FDWrapper(-1) : getfd(socket), begin, end)};
   }
   if (cmd == "unload-lua-script") {
-    return clearLuaScript();
+    vector<string> empty;
+    empty.emplace_back();
+    return doQueueReloadLuaScript(empty.begin(), empty.end());
   }
   if (cmd == "reload-acls") {
     return reloadACLs();
@@ -2419,7 +2317,7 @@ RecursorControlChannel::Answer RecursorControlParser::getAnswer(int socket, cons
       g_log << Logger::Error << "Unable to reload zones and forwards when chroot()'ed, requested via control channel" << endl;
       return {1, "Unable to reload zones and forwards when chroot()'ed, please restart\n"};
     }
-    return {0, reloadZoneConfigurationWithSysResolveReset()};
+    return {0, reloadZoneConfiguration(g_yamlSettings)};
   }
   if (cmd == "set-ecs-minimum-ttl") {
     return {0, setMinimumECSTTL(begin, end)};

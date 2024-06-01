@@ -88,7 +88,6 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
     _answerUnexpected = True
     _checkConfigExpectedOutput = None
     _verboseMode = False
-    _sudoMode = False
     _skipListeningOnCL = False
     _alternateListeningAddr = None
     _alternateListeningPort = None
@@ -151,12 +150,6 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
 
         if cls._verboseMode:
             dnsdistcmd.append('-v')
-        if cls._sudoMode:
-            preserve_env_values = ['LD_LIBRARY_PATH', 'LLVM_PROFILE_FILE']
-            for value in preserve_env_values:
-                if value in os.environ:
-                    dnsdistcmd.insert(0, value + '=' + os.environ[value])
-            dnsdistcmd.insert(0, 'sudo')
 
         for acl in cls._acl:
             dnsdistcmd.extend(['--acl', acl])
@@ -215,8 +208,6 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
                 print("kill...", p, file=sys.stderr)
                 p.kill()
                 p.wait()
-            if p.returncode != 0:
-              raise AssertionError('Process exited with return code %d' % (p.returncode))
         except OSError as e:
             # There is a race-condition with the poll() and
             # kill() statements, when the process is dead on the
@@ -702,15 +693,11 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
         if useQueue:
             cls._toResponderQueue.put(response, True, timeout)
 
-        try:
-            sock = cls.openTCPConnection(timeout)
-        except socket.timeout as e:
-            print("Timeout while opening TCP connection: %s" % (str(e)))
-            return (None, None)
+        sock = cls.openTCPConnection(timeout)
 
         try:
-            cls.sendTCPQueryOverConnection(sock, query, rawQuery, timeout=timeout)
-            message = cls.recvTCPResponseOverConnection(sock, timeout=timeout)
+            cls.sendTCPQueryOverConnection(sock, query, rawQuery)
+            message = cls.recvTCPResponseOverConnection(sock)
         except socket.timeout as e:
             print("Timeout while sending or receiving TCP data: %s" % (str(e)))
         except socket.error as e:
@@ -818,15 +805,15 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
         return result.decode('UTF-8')
 
     @classmethod
-    def sendConsoleCommand(cls, command, timeout=5.0, IPv6=False):
+    def sendConsoleCommand(cls, command, timeout=5.0):
         ourNonce = libnacl.utils.rand_nonce()
         theirNonce = None
-        sock = socket.socket(socket.AF_INET if not IPv6 else socket.AF_INET6, socket.SOCK_STREAM)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         if timeout:
             sock.settimeout(timeout)
 
-        sock.connect(("::1", cls._consolePort, 0, 0) if IPv6 else ("127.0.0.1", cls._consolePort))
+        sock.connect(("127.0.0.1", cls._consolePort))
         sock.send(ourNonce)
         theirNonce = sock.recv(len(ourNonce))
         if len(theirNonce) != len(ourNonce):
@@ -1129,7 +1116,7 @@ class DNSDistTest(AssertEqualDNSMessageMixin, unittest.TestCase):
             else:
                 cls._toResponderQueue.put(response, True, timeout)
 
-        (message, _) = quic_query(query, '127.0.0.1', timeout, port, verify=caFile, server_hostname=serverName)
+        message = quic_query(query, '127.0.0.1', timeout, port, verify=caFile, server_hostname=serverName)
 
         receivedQuery = None
 

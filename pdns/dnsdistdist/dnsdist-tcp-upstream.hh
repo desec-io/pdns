@@ -10,14 +10,13 @@ class TCPClientThreadData
 {
 public:
   TCPClientThreadData():
-    localRespRuleActions(dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::ResponseRules).getLocal()), localCacheInsertedRespRuleActions(dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::CacheInsertedResponseRules).getLocal()), localXFRRespRuleActions(dnsdist::rules::getResponseRuleChainHolder(dnsdist::rules::ResponseRuleChain::XFRResponseRules).getLocal()), mplexer(std::unique_ptr<FDMultiplexer>(FDMultiplexer::getMultiplexerSilent()))
+    localRespRuleActions(g_respruleactions.getLocal()), localCacheInsertedRespRuleActions(g_cacheInsertedRespRuleActions.getLocal()), mplexer(std::unique_ptr<FDMultiplexer>(FDMultiplexer::getMultiplexerSilent()))
   {
   }
 
   LocalHolders holders;
-  LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localRespRuleActions;
-  LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localCacheInsertedRespRuleActions;
-  LocalStateHolder<vector<dnsdist::rules::ResponseRuleAction>> localXFRRespRuleActions;
+  LocalStateHolder<vector<DNSDistResponseRuleAction>> localRespRuleActions;
+  LocalStateHolder<vector<DNSDistResponseRuleAction>> localCacheInsertedRespRuleActions;
   std::unique_ptr<FDMultiplexer> mplexer{nullptr};
   pdns::channel::Receiver<ConnectionInfo> queryReceiver;
   pdns::channel::Receiver<CrossProtocolQuery> crossProtocolQueryReceiver;
@@ -125,13 +124,12 @@ public:
 
   static void handleIOCallback(int desc, FDMultiplexer::funcparam_t& param);
   static void handleAsyncReady(int desc, FDMultiplexer::funcparam_t& param);
+  static void updateIO(std::shared_ptr<IncomingTCPConnectionState>& state, IOState newState, const struct timeval& now);
 
   static void queueResponse(std::shared_ptr<IncomingTCPConnectionState>& state, const struct timeval& now, TCPResponse&& response, bool fromBackend);
   static void handleTimeout(std::shared_ptr<IncomingTCPConnectionState>& state, bool write);
-  static void updateIOForAsync(std::shared_ptr<IncomingTCPConnectionState>& conn);
 
   virtual void handleIO();
-  virtual void updateIO(IOState newState, const timeval& now);
 
   QueryProcessingResult handleQuery(PacketBuffer&& query, const struct timeval& now, std::optional<int32_t> streamID);
   virtual void handleResponse(const struct timeval& now, TCPResponse&& response) override;
@@ -139,7 +137,7 @@ public:
   void handleXFRResponse(const struct timeval& now, TCPResponse&& response) override;
 
   virtual IOState sendResponse(const struct timeval& now, TCPResponse&& response);
-  void handleResponseSent(TCPResponse& currentResponse, size_t sentBytes);
+  void handleResponseSent(TCPResponse& currentResponse);
   virtual IOState handleHandshake(const struct timeval& now);
   void handleHandshakeDone(const struct timeval& now);
   ProxyProtocolResult handleProxyProtocolPayload();

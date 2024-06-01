@@ -43,31 +43,27 @@ The :class:`Netmask` class represents an IP netmask.
 
   .. method:: Netmask:isIpv4() -> bool
 
-     .. deprecated:: 4.3.0
+  .. deprecated:: v4.3.0
 
-        Use :func:`isIPv4`.
-
-     True if the netmask is an IPv4 netmask.
+      True if the netmask is an IPv4 netmask.
 
   .. method:: Netmask:isIPv4() -> bool
 
-     .. versionadded:: 4.3.0
+  .. versionadded:: v4.3.0
 
-     True if the netmask is an IPv4 netmask.
+      True if the netmask is an IPv4 netmask.
 
   .. method:: Netmask:isIpv6() -> bool
 
-     .. deprecated:: 4.3.0
+  .. deprecated:: v4.3.0
 
-        Use :func:`isIPv6`.
-
-     True if the netmask is an IPv6 netmask.
+      True if the netmask is an IPv6 netmask.
 
   .. method:: Netmask:isIPv6() -> bool
 
-     .. versionadded:: 4.3.0
+  .. deprecated:: v4.3.0
 
-     True if the netmask is an IPv6 netmask.
+      True if the netmask is an IPv6 netmask.
 
   .. method:: Netmask:match(address) -> bool
 

@@ -40,6 +40,7 @@ static void usage()
   cerr << "Syntax: sdig IP-ADDRESS-OR-DOH-URL PORT QNAME QTYPE "
           "[dnssec] [ednssubnet SUBNET/MASK] [hidesoadetails] [hidettl] [recurse] [showflags] "
           "[tcp] [dot] [insecure] [fastOpen] [subjectName name] [caStore file] [tlsProvider openssl|gnutls] "
+          "[xpf XPFDATA] [class CLASSNUM] "
           "[proxy UDP(0)/TCP(1) SOURCE-IP-ADDRESS-AND-PORT DESTINATION-IP-ADDRESS-AND-PORT] "
           "[dumpluaraw] [opcode OPNUM]"
        << endl;
@@ -57,7 +58,9 @@ static std::unordered_set<uint16_t> s_expectedIDs;
 
 static void fillPacket(vector<uint8_t>& packet, const string& q, const string& t,
                        bool dnssec, const boost::optional<Netmask>& ednsnm,
-                       bool recurse, QClass qclass, uint8_t opcode, uint16_t qid)
+                       bool recurse, uint16_t xpfcode, uint16_t xpfversion,
+                       uint64_t xpfproto, char* xpfsrc, char* xpfdst,
+                       QClass qclass, uint8_t opcode, uint16_t qid)
 {
   DNSPacketWriter pw(packet, DNSName(q), DNSRecordContent::TypeToNumber(t), qclass, opcode);
 
@@ -79,6 +82,19 @@ static void fillPacket(vector<uint8_t>& packet, const string& q, const string& t
     pw.commit();
   }
 
+  if (xpfcode) {
+    ComboAddress src(xpfsrc), dst(xpfdst);
+    pw.startRecord(g_rootdnsname, xpfcode, 0, QClass::IN, DNSResourceRecord::ADDITIONAL);
+    // xpf->toPacket(pw);
+    pw.xfr8BitInt(xpfversion);
+    pw.xfr8BitInt(xpfproto);
+    pw.xfrCAWithoutPort(xpfversion, src);
+    pw.xfrCAWithoutPort(xpfversion, dst);
+    pw.xfrCAPort(src);
+    pw.xfrCAPort(dst);
+    pw.commit();
+  }
+
   if (recurse) {
     pw.getHeader()->rd = true;
   }
@@ -90,7 +106,7 @@ static void printReply(const string& reply, bool showflags, bool hidesoadetails,
 {
   MOADNSParser mdp(false, reply);
   if (!s_expectedIDs.count(ntohs(mdp.d_header.id))) {
-    cout << "ID " << ntohs(mdp.d_header.id) << " was not expected, this response was not meant for us!"<<endl;
+    cout << "ID " << ntohs(mdp.d_header.id) << " was not expected, this response was not meant for us!" << endl;
   }
   s_expectedIDs.erase(ntohs(mdp.d_header.id));
 
@@ -108,7 +124,7 @@ static void printReply(const string& reply, bool showflags, bool hidesoadetails,
          << ttl(i->first.d_ttl) << "\t" << nameForClass(i->first.d_class, i->first.d_type) << "\t"
          << DNSRecordContent::NumberToType(i->first.d_type);
     if (dumpluaraw) {
-      cout<<"\t"<< makeLuaString(i->first.getContent()->serialize(DNSName(), true))<<endl;
+      cout << "\t" << makeLuaString(i->first.getContent()->serialize(DNSName(), true)) << endl;
       continue;
     }
     if (i->first.d_class == QClass::IN) {
@@ -167,14 +183,17 @@ static void printReply(const string& reply, bool showflags, bool hidesoadetails,
                << ", family = " << reso.scope.getNetwork().sin4.sin_family
                << endl;
         }
-      } else if (iter->first == EDNSOptionCode::PADDING) {
+      }
+      else if (iter->first == EDNSOptionCode::PADDING) {
         cerr << "EDNS Padding size: " << (iter->second.size()) << endl;
-      } else if (iter->first == EDNSOptionCode::EXTENDEDERROR) {
+      }
+      else if (iter->first == EDNSOptionCode::EXTENDEDERROR) {
         EDNSExtendedError eee;
         if (getEDNSExtendedErrorOptFromString(iter->second, eee)) {
           cerr << "EDNS Extended Error response: " << eee.infoCode << "/" << eee.extraText << endl;
         }
-      } else {
+      }
+      else {
         cerr << "Have unknown option " << (int)iter->first << endl;
       }
     }
@@ -184,7 +203,10 @@ static void printReply(const string& reply, bool showflags, bool hidesoadetails,
 int main(int argc, char** argv)
 try {
   /* default timeout of 10s */
-  struct timeval timeout{10,0};
+  struct timeval timeout
+  {
+    10, 0
+  };
   bool dnssec = false;
   bool recurse = false;
   bool tcp = false;
@@ -196,6 +218,8 @@ try {
   bool insecureDoT = false;
   bool fromstdin = false;
   boost::optional<Netmask> ednsnm;
+  uint16_t xpfcode = 0, xpfversion = 0, xpfproto = 0;
+  char *xpfsrc = NULL, *xpfdst = NULL;
   QClass qclass = QClass::IN;
   uint8_t opcode = 0;
   string proxyheader;
@@ -250,44 +274,55 @@ try {
         }
         ednsnm = Netmask(argv[++i]);
       }
+      else if (strcmp(argv[i], "xpf") == 0) {
+        if (argc < i + 6) {
+          cerr << "xpf needs five arguments" << endl;
+          exit(EXIT_FAILURE);
+        }
+        xpfcode = atoi(argv[++i]);
+        xpfversion = atoi(argv[++i]);
+        xpfproto = atoi(argv[++i]);
+        xpfsrc = argv[++i];
+        xpfdst = argv[++i];
+      }
       else if (strcmp(argv[i], "class") == 0) {
-        if (argc < i+2) {
-          cerr << "class needs an argument"<<endl;
+        if (argc < i + 2) {
+          cerr << "class needs an argument" << endl;
           exit(EXIT_FAILURE);
         }
         qclass = atoi(argv[++i]);
       }
       else if (strcmp(argv[i], "opcode") == 0) {
-        if (argc < i+2) {
-          cerr << "opcode needs an argument"<<endl;
+        if (argc < i + 2) {
+          cerr << "opcode needs an argument" << endl;
           exit(EXIT_FAILURE);
         }
         opcode = atoi(argv[++i]);
       }
       else if (strcmp(argv[i], "subjectName") == 0) {
         if (argc < i + 2) {
-          cerr << "subjectName needs an argument"<<endl;
+          cerr << "subjectName needs an argument" << endl;
           exit(EXIT_FAILURE);
         }
         subjectName = argv[++i];
       }
       else if (strcmp(argv[i], "caStore") == 0) {
         if (argc < i + 2) {
-          cerr << "caStore needs an argument"<<endl;
+          cerr << "caStore needs an argument" << endl;
           exit(EXIT_FAILURE);
         }
         caStore = argv[++i];
       }
       else if (strcmp(argv[i], "tlsProvider") == 0) {
         if (argc < i + 2) {
-          cerr << "tlsProvider needs an argument"<<endl;
+          cerr << "tlsProvider needs an argument" << endl;
           exit(EXIT_FAILURE);
         }
         tlsProvider = argv[++i];
       }
       else if (strcmp(argv[i], "proxy") == 0) {
-        if(argc < i+4) {
-          cerr<<"proxy needs three arguments"<<endl;
+        if (argc < i + 4) {
+          cerr << "proxy needs three arguments" << endl;
           exit(EXIT_FAILURE);
         }
         bool ptcp = atoi(argv[++i]);
@@ -320,9 +355,11 @@ try {
   ComboAddress dest;
   if (*argv[1] == 'h') {
     doh = true;
-  } else if(strcmp(argv[1], "stdin") == 0) {
+  }
+  else if (strcmp(argv[1], "stdin") == 0) {
     fromstdin = true;
-  } else {
+  }
+  else {
     dest = ComboAddress(argv[1] + (*argv[1] == '@'), atoi(argv[2]));
   }
 
@@ -340,7 +377,8 @@ try {
 
       questions.emplace_back(fields.first, fields.second);
     }
-  } else {
+  }
+  else {
     questions.emplace_back(name, type);
   }
 
@@ -348,7 +386,8 @@ try {
 #ifdef HAVE_LIBCURL
     vector<uint8_t> packet;
     s_expectedIDs.insert(0);
-    fillPacket(packet, name, type, dnssec, ednsnm, recurse, qclass, opcode, 0);
+    fillPacket(packet, name, type, dnssec, ednsnm, recurse, xpfcode, xpfversion,
+               xpfproto, xpfsrc, xpfdst, qclass, opcode, 0);
     MiniCurl mc;
     MiniCurl::MiniCurlHeaders mch;
     mch.emplace("Content-Type", "application/dns-message");
@@ -360,7 +399,8 @@ try {
 #else
     throw PDNSException("please link sdig against libcurl for DoH support");
 #endif
-  } else if (fromstdin) {
+  }
+  else if (fromstdin) {
     std::istreambuf_iterator<char> begin(std::cin), end;
     reply = string(begin, end);
 
@@ -370,7 +410,7 @@ try {
     std::vector<ProxyProtocolValue> ignoredValues;
     ssize_t offset = parseProxyHeader(reply, proxy, source, destination, wastcp, ignoredValues);
     if (offset && proxy) {
-      cout<<"proxy "<<(wastcp ? "tcp" : "udp")<<" headersize="<<offset<<" source="<<source.toStringWithPort()<<" destination="<<destination.toStringWithPort()<<endl;
+      cout << "proxy " << (wastcp ? "tcp" : "udp") << " headersize=" << offset << " source=" << source.toStringWithPort() << " destination=" << destination.toStringWithPort() << endl;
       reply = reply.substr(offset);
     }
 
@@ -379,7 +419,8 @@ try {
     }
 
     printReply(reply, showflags, hidesoadetails, dumpluaraw);
-  } else if (tcp) {
+  }
+  else if (tcp) {
     std::shared_ptr<TLSCtx> tlsCtx{nullptr};
     if (dot) {
       TLSContextParameters tlsParams;
@@ -402,7 +443,8 @@ try {
     for (const auto& it : questions) {
       vector<uint8_t> packet;
       s_expectedIDs.insert(counter);
-      fillPacket(packet, it.first, it.second, dnssec, ednsnm, recurse, qclass, opcode, counter);
+      fillPacket(packet, it.first, it.second, dnssec, ednsnm, recurse, xpfcode,
+                 xpfversion, xpfproto, xpfsrc, xpfdst, qclass, opcode, counter);
       counter++;
 
       // Prefer to do a single write, so that fastopen can send all the data on SYN
@@ -418,7 +460,7 @@ try {
     }
     for (size_t i = 0; i < questions.size(); i++) {
       uint16_t len;
-      if (handler.read((char *)&len, sizeof(len), timeout) != sizeof(len)) {
+      if (handler.read((char*)&len, sizeof(len), timeout) != sizeof(len)) {
         throw PDNSException("tcp read failed");
       }
       len = ntohs(len);
@@ -428,11 +470,13 @@ try {
       }
       printReply(reply, showflags, hidesoadetails, dumpluaraw);
     }
-  } else // udp
+  }
+  else // udp
   {
     vector<uint8_t> packet;
     s_expectedIDs.insert(0);
-    fillPacket(packet, name, type, dnssec, ednsnm, recurse, qclass, opcode, 0);
+    fillPacket(packet, name, type, dnssec, ednsnm, recurse, xpfcode, xpfversion,
+               xpfproto, xpfsrc, xpfdst, qclass, opcode, 0);
     string question(packet.begin(), packet.end());
     Socket sock(dest.sin4.sin_family, SOCK_DGRAM);
     question = proxyheader + question;
@@ -445,9 +489,10 @@ try {
     sock.recvFrom(reply, dest);
     printReply(reply, showflags, hidesoadetails, dumpluaraw);
   }
-
-} catch (std::exception& e) {
+}
+catch (std::exception& e) {
   cerr << "Fatal: " << e.what() << endl;
-} catch (PDNSException& e) {
+}
+catch (PDNSException& e) {
   cerr << "Fatal: " << e.reason << endl;
 }
