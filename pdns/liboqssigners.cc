@@ -537,10 +537,6 @@ const struct LoaderStruct
 {
   LoaderStruct()
   {
-#ifdef HAVE_LIBCRYPTO_PQC
-    DNSCryptoKeyEngine::report(DNSSECKeeper::XMSS, &LiboqsStflDNSCryptoKeyEngine::maker);
-    DNSCryptoKeyEngine::report(DNSSECKeeper::XMSSMT, &LiboqsStflDNSCryptoKeyEngine::maker);
-#endif
   }
 } loaderLiboqs;
 }

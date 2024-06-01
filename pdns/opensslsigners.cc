@@ -2346,11 +2346,6 @@ const struct LoaderStruct
 #ifdef HAVE_LIBCRYPTO_ED448
     DNSCryptoKeyEngine::report(DNSSECKeeper::ED448, &OpenSSLEDDSADNSCryptoKeyEngine::maker);
 #endif
-#ifdef HAVE_LIBCRYPTO_PQC
-    DNSCryptoKeyEngine::report(DNSSECKeeper::FALCON512, &OpenSSLPQCDNSCryptoKeyEngine::maker);
-    DNSCryptoKeyEngine::report(DNSSECKeeper::DILITHIUM2, &OpenSSLPQCDNSCryptoKeyEngine::maker);
-    DNSCryptoKeyEngine::report(DNSSECKeeper::SPHINCSSHA256128S, &OpenSSLPQCDNSCryptoKeyEngine::maker);
-#endif
   }
 } loaderOpenSSL;
 }
