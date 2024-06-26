@@ -447,7 +447,7 @@ void DNSCryptoKeyEngine::testMakers(unsigned int algo, maker_t* creator, maker_t
   else if(algo == DNSSECKeeper::XMSS)
     key_param = 0x01; /* XMSS_SHA256_H10 */
   else if(algo == DNSSECKeeper::XMSSMT)
-    key_param = 0x01; /* XMSSMT_SHA256_H20/2 */
+    key_param = 0x04; /* XMSSMT_SHA256_H40/4 */
   else
     throw runtime_error("Can't get key parameter for algorithm "+std::to_string(algo));
 
