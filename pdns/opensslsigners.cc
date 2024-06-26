@@ -1798,7 +1798,7 @@ public:
   }
 
   string getName() const override { return "OpenSSL PQC"; }
-  int getBits() const override { return d_priv_len << 3; }
+  int getBits() const override { return d_pub_len << 3; }
 
   void create(unsigned int bits) override;
   [[nodiscard]] storvector_t convertToISCVector() const override;

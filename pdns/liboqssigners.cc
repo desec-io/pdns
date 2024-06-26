@@ -308,7 +308,7 @@ public:
   }
 
   string getName() const override { return "liboqs stateful signatures"; }
-  int getBits() const override { return (d_stflctx.get()->length_public_key << 8); }
+  int getBits() const override { return (d_stflctx.get()->length_public_key << 3); }
 
   void create(unsigned int bits) override;
   [[nodiscard]] storvector_t convertToISCVector() const override;
