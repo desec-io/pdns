@@ -232,6 +232,7 @@ def install_liboqs(c):
     install_valgrind(c)
     c.run('git clone https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs')
     with c.cd('/tmp/liboqs'):
+        c.run('git fetch 31bdf13d4b8717b143f9ed584dfb8faceb80ebd9')
         c.run('git checkout 31bdf13d4b8717b143f9ed584dfb8faceb80ebd9')
     c.run('mkdir /tmp/liboqs/build')
     with c.cd('/tmp/liboqs/build'):
